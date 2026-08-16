@@ -643,12 +643,24 @@ export interface ComposeReady {
   hint: string | null
 }
 
+// 字幕样式：classic 经典白字 / karaoke 逐字点亮（与后端 compose_service.CAPTION_STYLES 对齐）
+export type CaptionStyle = 'classic' | 'karaoke'
+
 export const composeApi = {
   // 依赖是否就绪（Remotion + edge-tts）
   ready: (): Promise<ComposeReady> => api.get('/compose/ready'),
-  // 由保存的文案启动成片，返回承载产物的项目 ID。withScene=是否为每句生成信息动画（默认开）
-  fromScript: (scriptId: string, withScene = true): Promise<{ project_id: string; message: string }> =>
-    api.post('/compose/from-script', { script_id: scriptId, with_scene: withScene }),
+  // 由保存的文案启动成片，返回承载产物的项目 ID。
+  // withScene=是否为每句生成信息动画（默认开）；captionStyle=字幕样式（默认经典）
+  fromScript: (
+    scriptId: string,
+    withScene = true,
+    captionStyle: CaptionStyle = 'classic',
+  ): Promise<{ project_id: string; message: string }> =>
+    api.post('/compose/from-script', {
+      script_id: scriptId,
+      with_scene: withScene,
+      caption_style: captionStyle,
+    }),
 }
 
 export interface WhisperRuntimeStatus {

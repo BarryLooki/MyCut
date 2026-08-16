@@ -29,11 +29,16 @@ const DEFAULT_PROPS: CaptionedVideoProps = {
   title: '为什么 AI 有时候搜不到你想要的东西',
   style: '科普',
   theme: DEFAULT_THEME,
+  // 字幕样式：Studio 里改成 'karaoke' 可预览逐字点亮效果
+  captionStyle: 'classic',
+  // 实拍素材自带音轨音量（MiniMax H3 出片带原生环境音）；0 = 只留旁白。
+  // 真实渲染由后端按 MINIMAX_AUDIO_MODE 覆盖，见 compose_service。
+  videoVolume: 0,
   titleDurationInFrames: 2 * FPS,
   outroDurationInFrames: 2 * FPS,
   segments: [
     {
-      // Higgsfield Kling 3.0 生成的荒漠空镜（5.04s，1920×1080），落在 public/samples/
+      // 预览用示例荒漠空镜（5.04s，1920×1080），落在 public/samples/
       text: '两年前，他独自驾车驶入了这片无人区。',
       audioSrc: null,
       visualType: 'video',

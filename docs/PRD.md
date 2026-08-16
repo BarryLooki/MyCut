@@ -16,7 +16,7 @@
 - **本次版本目标**：完整创作闭环已跑通（查热点 → 文案 → 上传切片 → 自动成片）；本 PRD 覆盖全产品，并把"自动成片（实拍 + 组件叠加）"作为核心亮点模块。
 - **核心输入**：领域/关键词、拍摄的本地视频（可选 SRT）、保存的文案。
 - **核心输出**：选题卡片、结构化大纲与分镜文案、精彩切片 + 标题 + 合集、一键生成的成片 MP4（实拍空镜 + 动态组件 + 配音 + 字幕）。
-- **关键限制**：桌面本地运行；LLM 用 DeepSeek；不含任何平台下载/投稿；密钥存本地 `data/settings.json`（不入库）；实拍生成依赖 Higgsfield（付费额度），不可用时自动降级为纯信息动画。
+- **关键限制**：桌面本地运行；LLM 用 DeepSeek；不含任何平台下载/投稿；密钥存本地 `data/settings.json`（不入库）；实拍生成依赖 MiniMax H3 开放平台 API（按输出秒计费），不可用时自动降级为纯信息动画。
 
 ## 2. 功能范围与优先级
 
@@ -31,7 +31,7 @@
 | 自动切片 | 文案对齐 | 关联文案时抽要点，评分偏向匹配脚本的片段（旁路增强） | 否 | P1 | 已做 |
 | 自动切片 | 合集聚类 | 对切片主题聚类组织成合集 | 否 | P1 | 已做 |
 | 自动成片 | 文案→配音 | 每句文案 edge-tts 配音，ffprobe 测时长排字幕轴 | 是 | P0 | 已做 |
-| 自动成片 | 实拍空镜生成 | 每句文案→英文视频 prompt→Higgsfield 生成实拍空镜（并发、缓存、降级） | 是 | P0 | 已做 |
+| 自动成片 | 实拍空镜生成 | 每句文案→英文视频 prompt→MiniMax H3 生成实拍空镜（并发、缓存、降级） | 是 | P0 | 已做 |
 | 自动成片 | 组件叠加 | 实拍铺底 + Remotion 动态信息组件（关键词/图标/对比）弹性叠加 | 是 | P0 | 已做 |
 | 自动成片 | 字幕/转场 | 底部字幕硬切不重影、句间 fade 溶解、组件时机对齐配音、组件配色呼应画面 | 是 | P0 | 已做 |
 | 系统 | 桌面本地任务 | 后台线程执行任务，无需 Redis；进度轮询/WebSocket 回传 | 是 | P0 | 已做 |
@@ -50,12 +50,13 @@
 - **AI / Agent / Tool**：
   - LLM：DeepSeek（OpenAI 兼容接口，`deepseek-chat`）——查热点、大纲、文案、视觉脚本、视频 prompt。
   - 配音：edge-tts（免费免 key，中文自然）。
-  - 实拍视频：Higgsfield CLI（Kling/Veo/Seedance 等模型，OAuth 本地登录）。
+  - 实拍视频：MiniMax 开放平台文生视频 **v2** API（模型 MiniMax-H3，Bearer API Key；`POST /v2/video_generation` 提交 → `GET /v2/query/video_generation` 轮询 → `items[0].content.url` 直接取 mp4）。H3 限 4~15s、768P/2K，产物自带一条与画面同步的原生立体声音轨（环境音/音效，非中文口播）。
+  - 声音策略 `MINIMAX_AUDIO_MODE`：`mix`（默认，edge-tts 旁白 + 原生音轨压到 `MINIMAX_AUDIO_VOLUME`=0.18 垫底）/ `only`（不做 TTS，原生音轨全量，成片无人声解说）/ `off`（原生音轨静音，只留旁白）。后端算出 `videoVolume` 传给 Remotion `OffthreadVideo`。
   - 合成：Remotion（React 写视频，逐帧渲染 + ffmpeg 出 MP4）。
   - 切割/探测：FFmpeg / ffprobe。
 - **部署**：macOS 桌面本地；后端 `python -m backend.desktop_start --port 8000`，前端 Vite `:3000`，`/api` 代理到后端。
 - **推荐理由**：非技术用户要"开箱即用"→ 去掉 Redis、用 SQLite；AI 能力"组合现成服务"→ 不自建模型、迭代快、成本可控；成片用 Remotion 而非手工剪辑 → 数据驱动、可批量、可复现。
-- **功能与技术对应**：查热点/文案/视觉脚本=DeepSeek；配音=edge-tts；实拍=Higgsfield；合成=Remotion+FFmpeg；切片=FFmpeg+LLM 评分；持久化=SQLite+本地文件。
+- **功能与技术对应**：查热点/文案/视觉脚本=DeepSeek；配音=edge-tts；实拍=MiniMax H3；合成=Remotion+FFmpeg；切片=FFmpeg+LLM 评分；持久化=SQLite+本地文件。
 
 ## 4. 核心界面原型（框架版）
 
@@ -116,10 +117,11 @@
 - **输入**：文案（title / segments）。
 - **处理逻辑**（`compose_service.build_props`，分三阶段）：
   1. **配音（串行快）**：每句 edge-tts 合成，ffprobe 测真实时长，排字幕时间轴。
-  2. **实拍生成（并发）**：每句 → `video_prompt_service` 出英文空镜 prompt（尽量每句都出，抽象句用隐喻空镜；强制无人脸/无文字）→ `higgsfield_service` 线程池并发生成（默认 4 并发）→ 下载落 `remotion/public/`。含估价、额度上限保护、持久缓存（按句子原文 hash，同句不重生）、降级（失败/不可用回退信息动画）。
+     `MINIMAX_AUDIO_MODE=only` 时跳过本阶段（声音全交给 H3 原生音轨），每句时长改按 `MINIMAX_DURATION` 排。
+  2. **实拍生成（并发）**：每句 → `video_prompt_service` 出英文空镜 prompt（尽量每句都出，抽象句用隐喻空镜；强制无人脸/无文字）→ `minimax_service` 线程池并发生成（默认 4 并发）→ 下载落 `remotion/public/`。含估价（按单价×秒数）、成本上限保护、持久缓存（按句子原文 hash，同句不重生）、降级（失败/不可用回退信息动画）。
   3. **组件与主题（每句）**：`scene_service` 生成视觉脚本（关键词/图标/步骤/对比），只提炼**概念词**且去重（不照抄原句，避免与字幕重复）；组件入场时机按关键词在原句的**字符位置比例**对齐配音；实拍句抽视频主色生成呼应画面的 `overlayTheme`。
 - **输出**：Remotion `inputProps` → `remotion render` 出 `compose.mp4`（1920×1080）。前端：实拍全屏铺底 + 组件弹性叠加（overlay 模式，实底卡片带阴影）+ 底部白字字幕（硬切轨、不重影）+ 句间 fade 溶解。
-- **异常/边界**：Higgsfield 未登录/不可用 → 整条回退信息动画，不中断；下载优先 curl（规避 macOS Python SSL 证书问题）；渲染 headless 浏览器超时放宽到 120s；额度达上限后续句回退。
+- **异常/边界**：MiniMax 未配密钥/接口报错/轮询超时（>15min）→ 该句或整条回退信息动画，不中断；下载优先 curl（规避 macOS Python SSL 证书问题）；渲染 headless 浏览器超时放宽到 120s；成本达上限后续句回退。
 
 ## 6. AI Agent 设计
 
@@ -127,10 +129,10 @@
 - **触发**：用户点「生成视频」（`/compose/from-script`），后台线程执行。
 - **输入**：保存的文案 dict。
 - **步骤**：定调色 → 逐句配音 → 逐句判断/生成视频 prompt → 并发生成实拍 → 逐句生成组件脚本 + 呼应色 → 组 props → Remotion 渲染。
-- **Tool 调用**：DeepSeek（文案→视觉脚本/视频 prompt）、edge-tts（配音）、Higgsfield CLI（实拍）、FFmpeg（抽色/探测）、Remotion CLI（渲染）。
+- **Tool 调用**：DeepSeek（文案→视觉脚本/视频 prompt）、edge-tts（配音）、MiniMax H3 API（实拍）、FFmpeg（抽色/探测）、Remotion CLI（渲染）。
 - **输出**：`compose.mp4`，登记为 Clip，项目置完成。
 - **失败处理**：任一句实拍失败→该句回退信息动画；整体不可用→全回退；渲染失败→置 FAILED 记录原因。
-- **人工确认点**：无（一键成片）；成本通过 `HIGGSFIELD_MAX_CREDITS` 上限自动保护。
+- **人工确认点**：无（一键成片）；成本通过 `MINIMAX_PRICE_PER_SECOND` + `MINIMAX_MAX_COST` 上限自动保护。
 
 ### 6.2 提示词设计（关键两处）
 - **视频提示词（`prompt/视频提示词.txt`）**：
@@ -147,7 +149,7 @@
 |---|---|---|---|---|
 | DeepSeek LLM | 热点/大纲/文案/视觉脚本/视频 prompt | prompt + JSON input | 结构化 JSON | 重试；解析失败降级兜底 |
 | edge-tts | 逐句配音 | 文本 + 声音 | mp3 + 时长 | 失败用无配音兜底时长 |
-| Higgsfield CLI | 生成实拍空镜 | 英文 prompt + 时长/比例 | result_url(mp4) | 返回 None，该句回退信息动画 |
+| MiniMax H3 API | 生成实拍空镜 | 英文 prompt + 时长/比例/分辨率 | download_url(mp4) | 返回 None，该句回退信息动画 |
 | FFmpeg/ffprobe | 抽视频主色 / 探测时长 | 视频文件 | 主色 HEX / 秒 | 失败用统一 theme / 兜底时长 |
 | Remotion CLI | 逐帧渲染合成 | props.json | compose.mp4 | 超时/失败置任务 FAILED |
 
@@ -175,9 +177,9 @@
 - [ ] 组件入场时机跟随配音（句首词早出、句尾词晚出），不早于画面稳定、不超出音频。
 - [ ] 组件强调色与该句实拍画面同色系（accent 取自视频主色）。
 - [ ] 句间为 fade 溶解，相邻句字幕不同时半透明重叠。
-- [ ] Higgsfield 未登录/不可用时，整条自动回退为信息动画且成片成功产出。
+- [ ] MiniMax 未配密钥/不可用时，整条自动回退为信息动画且成片成功产出。
 - [ ] 同一句文案重复成片时命中持久缓存，不重新消耗生成额度。
-- [ ] 生成额度累计达 `HIGGSFIELD_MAX_CREDITS` 后，后续句回退信息动画而非继续消耗。
+- [ ] 估算成本累计达 `MINIMAX_MAX_COST` 后，后续句回退信息动画而非继续消耗。
 
 ### 8.4 系统
 - [ ] 后端桌面模式下任务在后台线程执行，无需 Redis 即可完成切片与成片。
@@ -194,5 +196,5 @@
 - 先保证 MVP 核心闭环：查热点 → 文案 → 上传切片 → 自动成片，再做 P1/P2。
 - 不实现"本期是否做=否"的功能（词级对齐、成片形态开关）。
 - 成片是**旁路模块**：任何实拍/组件失败都必须能回退信息动画，绝不中断成片主流程。
-- 涉及外部服务（Higgsfield/DeepSeek）一律"不可用即降级"，密钥走本地配置、不硬编码、不入库。
+- 涉及外部服务（MiniMax/DeepSeek）一律"不可用即降级"，密钥走本地配置、不硬编码、不入库。
 - 遇到 PRD 未说明的行为，选最小可用默认方案并用 TODO 标注；保持交互与验收标准一致。

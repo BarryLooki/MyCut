@@ -5,7 +5,7 @@
 复用现有 DeepSeek(LLMClient)。异常或不合法时返回 visual=False（该句回退到信息动画/静图，
 不浪费生成额度、不中断成片）。
 
-产物交给 higgsfield_service.generate_clip 去生成视频。
+产物交给 minimax_service.generate_clip 去生成视频（MiniMax H3 文生视频）。
 """
 
 from __future__ import annotations

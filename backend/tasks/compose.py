@@ -18,6 +18,7 @@ from backend.models.clip import Clip, ClipStatus
 from backend.models.project import Project, ProjectStatus
 from backend.models.task import Task, TaskStatus, TaskType
 from backend.services import compose_service
+from backend.services.compose_service import ComposeCancelled
 from backend.services.script_repo import ScriptRepo
 from backend.utils.tts import _probe_duration
 
@@ -29,7 +30,10 @@ _active_compose_lock = threading.Lock()
 
 
 @celery_app.task(bind=True, name='backend.tasks.compose.render_script_video')
-def render_script_video(self, project_id: str, script_id: str, with_scene: bool = True) -> Dict[str, Any]:
+def render_script_video(
+    self, project_id: str, script_id: str,
+    with_scene: bool = True, caption_style: str = "classic",
+) -> Dict[str, Any]:
     """
     根据保存的文案渲染一条成片，产物落项目 output/compose.mp4，并把项目置为完成。
 
@@ -37,6 +41,7 @@ def render_script_video(self, project_id: str, script_id: str, with_scene: bool 
         project_id: 承载成片产物的项目 ID（调用方已创建）
         script_id: 文案 ID
         with_scene: 是否为每句生成信息动画（关掉则纯字幕）
+        caption_style: 字幕样式（classic / karaoke；非法值 compose_service 内部回落 classic）
     """
     task_id = self.request.id
     logger.info(f"开始自动成片: project={project_id} script={script_id} task={task_id}")
@@ -84,10 +89,11 @@ def render_script_video(self, project_id: str, script_id: str, with_scene: bool 
 
         progress_cb(5, "准备中…")
         # with_video=None → compose 内部默认走实拍 + Remotion（用户点「生成视频」即得实拍成片，
-        # 零额外操作）；Higgsfield 不可用或某句不适合实拍时自动回退信息动画，不中断。
+        # 零额外操作）；MiniMax 不可用或某句不适合实拍时自动回退信息动画，不中断。
         compose_service.compose(
             script, workdir, out_path, job_id=project_id,
             progress_cb=progress_cb, with_scene=with_scene, with_video=None,
+            caption_style=caption_style,
         )
 
         # 成片时长（用于 Clip 记录）
@@ -124,6 +130,22 @@ def render_script_video(self, project_id: str, script_id: str, with_scene: bool 
 
         logger.info(f"自动成片完成: {out_path}")
         return {"success": True, "project_id": project_id, "video_path": str(out_path)}
+
+    except ComposeCancelled:
+        # 用户删除了正在生成的项目 → 主动取消。安静收尾：项目通常紧接着被删掉，
+        # 若还在（比如取消但没删），置为 FAILED 以免永远卡在处理中。
+        logger.info(f"自动成片已取消: project={project_id}")
+        try:
+            task.status = TaskStatus.FAILED
+            task.error_message = "已取消"
+            project = db.query(Project).filter(Project.id == project_id).first()
+            if project and project.status not in (ProjectStatus.COMPLETED,):
+                project.status = ProjectStatus.FAILED
+                project.updated_at = datetime.utcnow()
+            db.commit()
+        except Exception:  # noqa: BLE001
+            db.rollback()
+        return {"success": False, "project_id": project_id, "cancelled": True}
 
     except Exception as e:  # noqa: BLE001
         error_msg = f"自动成片失败: {e}"

@@ -51,6 +51,12 @@ export type CaptionSegment = {
 const resolveSrc = (src: string): string =>
   /^(https?:|data:)/.test(src) ? src : staticFile(src)
 
+// 字幕呈现样式。样式只决定「怎么显示字」，颜色一律从 theme 取（守 DESIGN.md 全单色+一抹橙）。
+//   'classic'  一次性整句白字 + 柔阴影（默认，与历史产物逐帧一致）
+//   'karaoke'  整句灰白打底，读到的字用 theme.accent 逐字点亮（按 时长/字数 匀速估算，非字级对齐）
+export type CaptionStyle = 'classic' | 'karaoke'
+export const DEFAULT_CAPTION_STYLE: CaptionStyle = 'classic'
+
 export type CaptionedVideoProps = {
   title: string
   style?: string
@@ -58,6 +64,11 @@ export type CaptionedVideoProps = {
   segments: CaptionSegment[]
   titleDurationInFrames: number
   outroDurationInFrames: number
+  // 字幕样式；缺省/非法值按 classic 处理，保证零回归
+  captionStyle?: CaptionStyle
+  // 实拍素材自带音轨的音量 0~1（MiniMax H3 出片带原生环境音）。
+  // 缺省/0 = 静音，只留 TTS 旁白（历史行为）；后端按 MINIMAX_AUDIO_MODE 传值。
+  videoVolume?: number
 }
 
 // 中文字体：显式加载的 Noto Sans SC（+ 系统字兜底），见 ./fonts
@@ -122,7 +133,8 @@ const TitleCard: React.FC<{ title: string; style?: string; theme: CaptionedVideo
 const CaptionCard: React.FC<{
   segment: CaptionSegment
   theme: CaptionedVideoProps['theme']
-}> = ({ segment, theme }) => {
+  videoVolume?: number
+}> = ({ segment, theme, videoVolume }) => {
   return (
     <AbsoluteFill style={{ backgroundColor: theme.bg, fontFamily: FONT_STACK }}>
       <AbsoluteFill style={{ overflow: 'hidden' }}>
@@ -133,6 +145,7 @@ const CaptionCard: React.FC<{
           theme={theme}
           overlayTheme={segment.overlayTheme}
           durationInFrames={segment.durationInFrames}
+          videoVolume={videoVolume}
         />
       </AbsoluteFill>
 
@@ -148,8 +161,9 @@ const CaptionCard: React.FC<{
   )
 }
 
-// 单条字幕：一次性显示整句，无淡入淡出。颜色统一白字 + 阴影，位置压底稍偏下。
-const CaptionText: React.FC<{ text: string }> = ({ text }) => (
+// 字幕容器：所有样式共用的定位/排版外框（压底稍偏下、居中、限宽），
+// 各样式只负责容器内文字的呈现，位置口径一致，切换样式不跳位。
+const CaptionBox: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <AbsoluteFill style={{ fontFamily: FONT_STACK }}>
     <div
       style={{
@@ -168,17 +182,66 @@ const CaptionText: React.FC<{ text: string }> = ({ text }) => (
           maxWidth: 1500,
           fontSize: 56,
           fontWeight: 600,
-          color: '#FFFFFF',
           lineHeight: 1.45,
           letterSpacing: '0.5px',
           textShadow: '0 2px 16px rgba(0,0,0,0.6)',
         }}
       >
-        {text}
+        {children}
       </div>
     </div>
   </AbsoluteFill>
 )
+
+// classic：一次性显示整句，无淡入淡出。颜色统一白字 + 阴影。（历史默认，逐帧不变）
+const ClassicCaption: React.FC<{ text: string }> = ({ text }) => (
+  <CaptionBox>
+    <span style={{ color: '#FFFFFF' }}>{text}</span>
+  </CaptionBox>
+)
+
+// karaoke：整句灰白打底，随播放进度逐字用 theme.accent 点亮。
+// 无字级时间戳（edge-tts 中文 WordBoundary 不可靠），故按 已播帧/总帧 × 字数 匀速估算亮到第几字。
+// 已亮：accent 实色；未亮：半透明白（仍可读，形成"字随节奏往前推"的观感）。
+const KaraokeCaption: React.FC<{ text: string; durationInFrames: number; accent: string }> = ({
+  text,
+  durationInFrames,
+  accent,
+}) => {
+  const frame = useCurrentFrame()
+  const chars = Array.from(text) // 按码点拆，兼容 emoji/组合字
+  const progress = durationInFrames > 0 ? Math.min(1, Math.max(0, frame / durationInFrames)) : 1
+  // 已点亮到第几个字（含）——四舍五入让最后一帧刚好全亮
+  const lit = Math.round(progress * chars.length)
+  return (
+    <CaptionBox>
+      {chars.map((ch, i) => (
+        <span
+          key={i}
+          style={{
+            color: i < lit ? accent : 'rgba(255,255,255,0.55)',
+            transition: 'color 80ms ease-out',
+          }}
+        >
+          {ch}
+        </span>
+      ))}
+    </CaptionBox>
+  )
+}
+
+// 字幕样式分发：按 captionStyle 选实现，非法/缺省回落 classic（零回归兜底）。
+const CaptionText: React.FC<{
+  text: string
+  captionStyle: CaptionStyle
+  durationInFrames: number
+  accent: string
+}> = ({ text, captionStyle, durationInFrames, accent }) => {
+  if (captionStyle === 'karaoke') {
+    return <KaraokeCaption text={text} durationInFrames={durationInFrames} accent={accent} />
+  }
+  return <ClassicCaption text={text} />
+}
 
 const OutroCard: React.FC<{ theme: CaptionedVideoProps['theme'] }> = ({ theme }) => {
   const frame = useCurrentFrame()
@@ -214,8 +277,12 @@ export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({
   segments,
   titleDurationInFrames,
   outroDurationInFrames,
+  captionStyle,
+  videoVolume,
 }) => {
   const timing = linearTiming({ durationInFrames: TRANSITION_FRAMES })
+  // 非法/缺省值回落 classic，守住零回归
+  const activeCaptionStyle: CaptionStyle = captionStyle === 'karaoke' ? 'karaoke' : DEFAULT_CAPTION_STYLE
 
   // 字幕轨每句的起始帧与时长。TransitionSeries 让相邻片段重叠 TRANSITION_FRAMES 帧做转场，
   // 所以片头后第一句起点 = 片头时长 − 重叠帧；之后每句 = 前句起点 + 前句时长 − 重叠帧。
@@ -245,7 +312,7 @@ export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({
         {segments.map((seg, i) => (
           <React.Fragment key={i}>
             <TransitionSeries.Sequence durationInFrames={seg.durationInFrames}>
-              <CaptionCard segment={seg} theme={theme} />
+              <CaptionCard segment={seg} theme={theme} videoVolume={videoVolume} />
               {seg.audioSrc ? <Audio src={resolveSrc(seg.audioSrc)} /> : null}
             </TransitionSeries.Sequence>
             {i < segments.length - 1 ? (
@@ -266,7 +333,13 @@ export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({
         const r = captionRanges[i]
         return (
           <Sequence key={i} from={Math.max(0, r.from)} durationInFrames={r.duration}>
-            <CaptionText text={seg.text} />
+            {/* karaoke 用 useCurrentFrame（相对本 Sequence，从 0 起），进度基准 = 本 Sequence 时长 r.duration */}
+            <CaptionText
+              text={seg.text}
+              captionStyle={activeCaptionStyle}
+              durationInFrames={r.duration}
+              accent={theme.accent}
+            />
           </Sequence>
         )
       })}

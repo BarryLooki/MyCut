@@ -380,6 +380,15 @@ async def delete_project(
 ):
     """Delete a project and all its related files."""
     try:
+        # 若该项目正在自动成片，先中止渲染任务（置取消事件 + kill 子进程），
+        # 避免删了记录但后台 Remotion 还在跑、白烧资源。幂等：没在跑则无副作用。
+        try:
+            from ...services import compose_service
+            if compose_service.request_cancel(project_id):
+                logger.info("删除前已请求取消正在进行的成片任务: %s", project_id)
+        except Exception:  # noqa: BLE001
+            logger.warning("请求取消成片任务失败（继续删除）: %s", project_id)
+
         success = project_service.delete_project_with_files(project_id, user_id=user_id)
         if not success:
             raise HTTPException(status_code=404, detail="Project not found")

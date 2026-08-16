@@ -26,9 +26,10 @@ log "清理 ${DAYS} 天前的成片产物与实拍缓存 ..."
 log "清理前后端容器磁盘占用："
 docker compose exec -T backend sh -c 'du -sh /app/data /app/remotion/public 2>/dev/null' || true
 
-# 1) 实拍缓存 hf_cache：删 N 天未访问的 mp4（同句命中缓存会更新 mtime，热数据不会误删）
+# 1) 实拍缓存 mm_cache（MiniMax）/ hf_cache（历史遗留）：删 N 天未访问的 mp4
+#    （同句命中缓存会更新 mtime，热数据不会误删）
 docker compose exec -T backend sh -c "
-  find /app/remotion/public/hf_cache -type f -name '*.mp4' -mtime +${DAYS} -delete 2>/dev/null || true
+  find /app/remotion/public/mm_cache /app/remotion/public/hf_cache -type f -name '*.mp4' -mtime +${DAYS} -delete 2>/dev/null || true
 "
 
 # 2) 旧成片/切片产物：删 N 天前的项目输出 mp4（保留数据库记录，只删大文件）

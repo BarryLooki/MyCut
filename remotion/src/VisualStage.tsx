@@ -32,7 +32,11 @@ const resolveSrc = (src: string): string =>
 // —— 视频层：cover 铺满全屏 + 整段极缓慢放大（Ken Burns 味，避免死板静止）——
 // span = 本片段时长（帧）。注意 useCurrentFrame 在 Sequence 内已是局部帧（从 0 起），
 // 但 useVideoConfig().durationInFrames 是整条合成总时长，不能用来算单段推拉——必须用片段时长。
-const VideoLayer: React.FC<{ src: string; span: number }> = ({ src, span }) => {
+const VideoLayer: React.FC<{ src: string; span: number; volume: number }> = ({
+  src,
+  span,
+  volume,
+}) => {
   const frame = useCurrentFrame()
   // 1.0 → 1.06 极缓推近，克制不喧宾夺主
   const scale = interpolate(frame, [0, Math.max(1, span)], [1, 1.06], {
@@ -43,8 +47,12 @@ const VideoLayer: React.FC<{ src: string; span: number }> = ({ src, span }) => {
     <AbsoluteFill style={{ overflow: 'hidden' }}>
       <OffthreadVideo
         src={resolveSrc(src)}
-        // muted：旁白走独立 <Audio>，素材自带声音会打架，一律静音
-        muted
+        // 素材自带音轨（MiniMax H3 会输出与画面同步的原生立体声环境音）：
+        //   volume=0 → muted，旁白独占声道（历史行为）
+        //   0<volume<1 → 环境声垫在旁白下面，音画同源、更有现场感
+        //   volume=1 → 素材声音全量（无 TTS 旁白时用）
+        // 后端按 MINIMAX_AUDIO_MODE 决定传什么值，见 compose_service。
+        {...(volume > 0 ? { volume } : { muted: true })}
         style={{
           width: '100%',
           height: '100%',
@@ -91,7 +99,8 @@ export const VisualStage: React.FC<{
   theme: SceneTheme
   overlayTheme?: SceneTheme | null // 叠加组件专用 theme（accent 取自视频主色）；缺省用全局 theme
   durationInFrames: number // 本片段时长（帧），用于 Ken Burns 推拉落界
-}> = ({ visualType, visualSrc, scene, theme, overlayTheme, durationInFrames }) => {
+  videoVolume?: number // 视频素材自带音轨音量 0~1；缺省 0 = 静音（旁白独占声道）
+}> = ({ visualType, visualSrc, scene, theme, overlayTheme, durationInFrames, videoVolume }) => {
   const hasMedia = !!visualSrc && (visualType === 'video' || visualType === 'image-kenburns')
 
   // 有实拍/静图素材：铺为底层；若同时有 scene，把精致组件（SceneStage overlay 模式）
@@ -100,7 +109,11 @@ export const VisualStage: React.FC<{
     return (
       <AbsoluteFill>
         {visualType === 'video' ? (
-          <VideoLayer src={visualSrc!} span={durationInFrames} />
+          <VideoLayer
+            src={visualSrc!}
+            span={durationInFrames}
+            volume={Math.min(1, Math.max(0, videoVolume ?? 0))}
+          />
         ) : (
           <ImageKenBurns src={visualSrc!} span={durationInFrames} />
         )}

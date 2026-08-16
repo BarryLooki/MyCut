@@ -1,8 +1,14 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Layout, Typography, Button, Spin, Empty, Popconfirm, message } from 'antd'
+import { Layout, Typography, Button, Spin, Empty, Popconfirm, Modal, message } from 'antd'
 import { EditOutlined, ScissorOutlined, DeleteOutlined, PlusOutlined, VideoCameraOutlined } from '@ant-design/icons'
-import { scriptApi, composeApi, SavedScript } from '../services/api'
+import { scriptApi, composeApi, CaptionStyle, SavedScript } from '../services/api'
+
+// 字幕样式选项（生成前让用户选）。只放 2 套先验证：经典 / 逐字点亮。
+const CAPTION_STYLE_OPTIONS: { value: CaptionStyle; label: string; desc: string }[] = [
+  { value: 'classic', label: '经典', desc: '整句白字，干净清晰，通用' },
+  { value: 'karaoke', label: '逐字点亮', desc: '随播放逐字变亮，有节奏感' },
+]
 
 const { Content } = Layout
 const { Title, Text } = Typography
@@ -17,6 +23,9 @@ const ScriptLibraryPage: React.FC = () => {
   const [loading, setLoading] = useState(true)
   // 正在启动成片的文案 id（按钮 loading）
   const [composingId, setComposingId] = useState<string | null>(null)
+  // 生成视频前的字幕样式选择：待生成的文案 + 已选样式
+  const [pendingScript, setPendingScript] = useState<SavedScript | null>(null)
+  const [captionStyle, setCaptionStyle] = useState<CaptionStyle>('classic')
 
   const load = async () => {
     setLoading(true)
@@ -38,12 +47,20 @@ const ScriptLibraryPage: React.FC = () => {
     navigate('/', { state: { attachedScript: JSON.stringify(script) } })
   }
 
-  // 自动成片：文案 → 配音 + 逐句字幕 → 项目库出片
-  const handleCompose = async (s: SavedScript) => {
+  // 点「生成视频」：先校验，再打开字幕样式选择弹窗（默认经典）
+  const openComposeModal = (s: SavedScript) => {
     if (!s.segments?.length) {
       message.warning('这篇文案还没有分镜内容，无法生成视频')
       return
     }
+    setCaptionStyle('classic')
+    setPendingScript(s)
+  }
+
+  // 确认样式后启动自动成片：文案 → 配音 + 逐句字幕 → 项目库出片
+  const handleCompose = async () => {
+    const s = pendingScript
+    if (!s) return
     setComposingId(s.id)
     try {
       const ready = await composeApi.ready()
@@ -51,7 +68,8 @@ const ScriptLibraryPage: React.FC = () => {
         message.warning(ready.hint || '自动成片依赖未就绪')
         return
       }
-      await composeApi.fromScript(s.id)
+      await composeApi.fromScript(s.id, true, captionStyle)
+      setPendingScript(null)
       message.success('已开始生成视频，去首页看进度')
       navigate('/')
     } catch (e: any) {
@@ -116,7 +134,7 @@ const ScriptLibraryPage: React.FC = () => {
                     <Button size="small" icon={<ScissorOutlined />} onClick={() => handleUseForClip(s)}
                       style={{ borderRadius: '999px', border: '1px solid var(--ac-line)', color: 'var(--ac-ink)' }}>用它剪视频</Button>
                     <Button size="small" icon={<VideoCameraOutlined />} loading={composingId === s.id}
-                      onClick={() => handleCompose(s)}
+                      onClick={() => openComposeModal(s)}
                       style={{ borderRadius: '999px', border: '1px solid var(--ac-line)', color: 'var(--ac-accent)' }}>生成视频</Button>
                     <Popconfirm title="删除这篇文案？" onConfirm={() => handleDelete(s.id)} okText="删除" cancelText="取消">
                       <Button size="small" type="text" icon={<DeleteOutlined />} danger style={{ marginLeft: 'auto', borderRadius: '999px' }} />
@@ -135,6 +153,46 @@ const ScriptLibraryPage: React.FC = () => {
           )}
         </div>
       </Content>
+
+      {/* 生成前选字幕样式 */}
+      <Modal
+        open={!!pendingScript}
+        title="选择字幕样式"
+        onCancel={() => setPendingScript(null)}
+        onOk={handleCompose}
+        okText="开始生成"
+        cancelText="取消"
+        confirmLoading={!!composingId}
+        okButtonProps={{ style: { background: 'var(--ac-cta-bg)', borderColor: 'var(--ac-cta-bg)', color: 'var(--ac-cta-fg)' } }}
+        width={420}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', margin: '8px 0 4px' }}>
+          {CAPTION_STYLE_OPTIONS.map((opt) => {
+            const active = captionStyle === opt.value
+            return (
+              <div
+                key={opt.value}
+                onClick={() => setCaptionStyle(opt.value)}
+                style={{
+                  cursor: 'pointer',
+                  border: `1px solid ${active ? 'var(--ac-accent)' : 'var(--ac-line)'}`,
+                  background: active ? 'var(--ac-card)' : 'transparent',
+                  borderRadius: '16px',
+                  padding: '14px 16px',
+                  transition: 'border-color 150ms ease-out, background 150ms ease-out',
+                }}
+              >
+                <div style={{ fontSize: '14px', fontWeight: 600, color: active ? 'var(--ac-accent)' : 'var(--ac-ink)' }}>
+                  {opt.label}
+                </div>
+                <div style={{ fontSize: '12.5px', color: 'var(--ac-sub)', marginTop: '4px', lineHeight: 1.5 }}>
+                  {opt.desc}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </Modal>
     </Layout>
   )
 }

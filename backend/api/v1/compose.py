@@ -26,6 +26,7 @@ router = APIRouter()
 class ComposeFromScriptRequest(BaseModel):
     script_id: str
     with_scene: bool = True  # 是否为每句生成信息动画（关掉则纯字幕）
+    caption_style: str = "classic"  # 字幕样式：classic 经典白字 / karaoke 逐字点亮（非法值后端回落 classic）
 
 
 class ComposeFromScriptResponse(BaseModel):
@@ -87,7 +88,10 @@ def compose_from_script(
 
     # 派发渲染任务（桌面模式自动后台线程执行）
     from ...tasks.compose import render_script_video
-    render_script_video.delay(project_id=project_id, script_id=req.script_id, with_scene=req.with_scene)
+    render_script_video.delay(
+        project_id=project_id, script_id=req.script_id,
+        with_scene=req.with_scene, caption_style=req.caption_style,
+    )
 
     logger.info(f"已启动自动成片: project={project_id} script={req.script_id}")
     return ComposeFromScriptResponse(project_id=project_id, message="已开始生成视频")
