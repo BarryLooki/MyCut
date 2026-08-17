@@ -14,6 +14,7 @@ import re
 import shutil
 import subprocess
 import threading
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
@@ -205,7 +206,9 @@ def build_props(
             collage provider 的成片强制无声，永远走 TTS 旁白
       2) 上区画面来源，按优先级：
          a) with_video 且这句适合配画面 → 当前 video_provider 生成空镜视频（visualType='video'）
-            provider 由 VIDEO_PROVIDER 选：minimax=实拍空镜（默认）/ collage=半调纸拼贴组装动画
+            画面风格由 VIDEO_PROVIDER 选：minimax=实拍空镜（默认）/ collage=半调纸拼贴 /
+            mixed=**按句混排**（video_prompt_service 逐句判 visual_style：
+            具体可实拍的走实拍、抽象关系走拼贴），逐句结果记在 segment.videoProvider
          b) 否则 with_scene → 信息动画 scene（visualType='scene'：关键词/图标/步骤/箭头/对比）
          c) 都关 → 纯字幕（上区留底色）
 
@@ -272,7 +275,8 @@ def build_props(
     scene_service = get_scene_service() if with_scene else None
 
     # 空镜素材路线：这是默认成片形态（用户点「生成视频」即走空镜 + Remotion，零额外操作）。
-    # 画面风格由 VIDEO_PROVIDER 决定（minimax=实拍 / collage=纸拼贴），见 video_provider。
+    # 画面风格由 VIDEO_PROVIDER 决定（minimax=实拍 / collage=纸拼贴 / mixed=按句混排），
+    # 见 video_provider。
     # with_video 缺省(None)=默认开启；对应 provider 的 *_DISABLE=1 可全局强制关闭（调试/省钱）。
     # 仅当开启且该 provider 已就绪（配了 key）时才真正生效——否则整条自动回退信息动画，绝不中断成片。
     if with_video is None:
@@ -326,47 +330,62 @@ def build_props(
         if progress_cb:
             progress_cb(30, "设计画面中…")
         # B1) 逐句出视频 prompt + 估价，按额度上限筛出真正要生成的句子（串行，保证额度累加确定）
-        to_generate: List[tuple] = []  # (idx, prompt)
+        to_generate: List[tuple] = []  # (idx, prompt, visual_style)
         for idx, (sentence, role) in enumerate(sentence_items):
             vp = video_prompt_service.build(sentence, role=role, context_title=title, style=style)
             if not (vp.get("visual") and vp.get("prompt")):
                 continue
-            cost = video_provider.estimate_cost(vp["prompt"]) or 0.0
+            # visual_style 只在 VIDEO_PROVIDER=mixed 下决定这句走实拍还是拼贴；
+            # 单一 provider 模式下 video_provider 会忽略它（行为与加混排前一致）。
+            vstyle = str(vp.get("visual_style") or "live")
+            cost = video_provider.estimate_cost(vp["prompt"], style=vstyle) or 0.0
             if max_credits is not None and (spent_credits + cost) > max_credits:
                 logger.warning(
-                    "实拍素材达成本上限 %.1f（已排 %.1f），第 %d 句起回退信息动画。",
+                    "空镜素材达成本上限 %.1f（已排 %.1f），第 %d 句起回退信息动画。",
                     max_credits, spent_credits, idx,
                 )
                 break  # 后续句子不再排（额度累加是顺序性的）
             spent_credits += cost
-            to_generate.append((idx, vp["prompt"]))
+            to_generate.append((idx, vp["prompt"], vstyle))
 
         # B2) 并发生成。generate_clip 内部含缓存/下载/降级，失败返回 None（该句自然回退 scene）。
         done = 0
         total_gen = len(to_generate)
-        # 进度文案跟着风格走：用户看到的是「生成实拍」还是「生成拼贴」
-        gen_label = "拼贴" if video_provider.name() == "collage" else "实拍"
-        logger.info("空镜并发生成（provider=%s）：%d 句待生成，并发数 %d",
-                    video_provider.name(), total_gen, VIDEO_CONCURRENCY)
+        # 进度文案跟着风格走：用户看到的是「生成实拍」/「生成拼贴」，混排时两种都有就叫「画面」
+        gen_label = {"collage": "拼贴", "mixed": "画面"}.get(video_provider.name(), "实拍")
+        if video_provider.is_mixed():
+            mix = Counter(video_provider.provider_for_style(s) for _, _, s in to_generate)
+            logger.info("空镜并发生成（按句混排）：%d 句待生成（%s），并发数 %d", total_gen,
+                        "，".join(f"{k}×{v}" for k, v in sorted(mix.items())) or "无",
+                        VIDEO_CONCURRENCY)
+        else:
+            logger.info("空镜并发生成（provider=%s）：%d 句待生成，并发数 %d",
+                        video_provider.name(), total_gen, VIDEO_CONCURRENCY)
         if total_gen:
-            def _gen(idx: int, prompt: str):
+            def _gen(idx: int, prompt: str, vstyle: str):
                 src = video_provider.generate_clip(
                     prompt, public_dir, rel_prefix=f"compose/{job_id}",
                     cache_key=sentence_items[idx][0],  # 句子原文做缓存键，同句复用
+                    style=vstyle,
                 )
-                return idx, src
+                return idx, src, vstyle
 
             with ThreadPoolExecutor(max_workers=VIDEO_CONCURRENCY) as pool:
-                futures = [pool.submit(_gen, idx, prompt) for idx, prompt in to_generate]
+                futures = [pool.submit(_gen, idx, prompt, vstyle)
+                           for idx, prompt, vstyle in to_generate]
                 for fut in as_completed(futures):
                     try:
-                        idx, src = fut.result()
+                        idx, src, vstyle = fut.result()
                     except Exception as e:  # noqa: BLE001
                         logger.warning("空镜生成线程异常，跳过: %s", e)
                         continue
                     if src:
                         out_segments[idx]["visualType"] = "video"
                         out_segments[idx]["visualSrc"] = src
+                        # 逐句记下实际出画面的 provider，并按它给这句的素材音轨定音量：
+                        # 混排时拼贴句零音轨、实拍句要留原生环境音，一个全局值盖不住两种。
+                        out_segments[idx]["videoProvider"] = video_provider.provider_for_style(vstyle)
+                        out_segments[idx]["videoVolume"] = video_provider.clip_volume_for(vstyle)
                     done += 1
                     if progress_cb:
                         progress_cb(30 + int(done / total_gen * 25), f"生成{gen_label} {done}/{total_gen}")
@@ -403,9 +422,10 @@ def build_props(
         "style": style or None,
         "theme": theme,
         "captionStyle": _normalize_caption_style(caption_style),
-        # 空镜素材自带音轨的音量：H3 出片带与画面同步的原生环境音。
+        # 空镜素材自带音轨的音量（整条缺省值）：H3 出片带与画面同步的原生环境音。
         # mix（默认）压低垫在旁白下；only 全量且没有旁白；off 静音（历史行为）。
         # collage provider 恒 0（拼贴成片本身无声）。
+        # 混排时逐句还有 segment.videoVolume 覆盖它（拼贴句 0 / 实拍句这一档）。
         "videoVolume": video_provider.clip_volume(),
         "titleDurationInFrames": _seconds_to_frames(TITLE_SECONDS),
         "outroDurationInFrames": _seconds_to_frames(OUTRO_SECONDS),
@@ -415,8 +435,12 @@ def build_props(
     props_path = workdir / "props.json"
     with open(props_path, "w", encoding="utf-8") as f:
         json.dump(props, f, ensure_ascii=False, indent=2)
+    # 画面构成也记一笔：混排时最想知道的就是实拍/拼贴各占几句、几句回退了信息动画
+    visual_mix = Counter(seg.get("videoProvider") or "scene" for seg in out_segments)
     logger.info(
-        f"已写 Remotion props: {props_path}（{len(out_segments)} 句, 信息动画={with_scene}, "
+        f"已写 Remotion props: {props_path}（{len(out_segments)} 句, "
+        f"画面={'/'.join(f'{k}×{v}' for k, v in sorted(visual_mix.items()))}, "
+        f"模式={video_provider.name()}, 信息动画={with_scene}, "
         f"声音={video_provider.audio_mode()}/旁白={narration_on}）"
     )
 

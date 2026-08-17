@@ -45,6 +45,12 @@ export type CaptionSegment = {
   overlayTheme?: SceneTheme | null // 实拍句叠加组件专用 theme（accent 取自视频主色，呼应画面）
   durationInFrames: number
   role?: string // hook | body | cta
+  // 混排（VIDEO_PROVIDER=mixed）时这句画面实际来自哪个 provider：'minimax' 实拍 / 'collage' 纸拼贴。
+  // 目前只用于诊断与下面的逐句音量，不影响渲染分支。
+  videoProvider?: string | null
+  // 该句素材音轨音量 0~1，覆盖顶层 videoVolume。混排时必需：拼贴文件零音轨、
+  // 实拍要留原生环境音，一个全局值盖不住两种。缺省则沿用顶层值。
+  videoVolume?: number | null
 }
 
 // audioSrc 是相对 remotion/public/ 的 staticFile 路径；http(s)/data 原样用
@@ -145,7 +151,8 @@ const CaptionCard: React.FC<{
           theme={theme}
           overlayTheme={segment.overlayTheme}
           durationInFrames={segment.durationInFrames}
-          videoVolume={videoVolume}
+          // 逐句值优先（混排时每句不同），没给才用整条的缺省值
+          videoVolume={segment.videoVolume ?? videoVolume}
         />
       </AbsoluteFill>
 
