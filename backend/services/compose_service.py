@@ -23,7 +23,7 @@ from ..utils.ffmpeg_utils import get_npx_path
 from ..utils import tts
 from .scene_service import get_scene_service
 from .theme_service import get_theme_service, DEFAULT_THEME
-from . import minimax_service
+from . import video_provider
 from .video_prompt_service import get_video_prompt_service
 
 logger = logging.getLogger(__name__)
@@ -35,9 +35,12 @@ OUTRO_SECONDS = 2.0
 FALLBACK_SECONDS_PER_SENTENCE = 3.0
 # 渲染超时（秒）——避免 Node 卡死 wedge 后台线程
 RENDER_TIMEOUT = 900
-# 实拍素材并发生成数：多句同时调 MiniMax，把串行的 N×(1~3min) 压成并行。
-# 可用环境变量 MINIMAX_CONCURRENCY 调整（默认 4，别太高以免撞服务端限流）。
-VIDEO_CONCURRENCY = max(1, int(os.environ.get("MINIMAX_CONCURRENCY", "4") or "4"))
+# 空镜并发生成数：多句同时调视频 provider，把串行的 N×(1~3min) 压成并行。
+# VIDEO_CONCURRENCY 优先，MINIMAX_CONCURRENCY 是换 provider 前的旧名字（继续认，别让老 .env 失效）。
+# 默认 4，别太高以免撞服务端限流。
+VIDEO_CONCURRENCY = max(1, int(
+    os.environ.get("VIDEO_CONCURRENCY") or os.environ.get("MINIMAX_CONCURRENCY") or "4"
+))
 
 # 画面主题不再写死：由 theme_service 按每条视频内容调性生成（见 build_props）。
 # 默认主题（LLM 失败时回退）在 theme_service.DEFAULT_THEME。
@@ -198,9 +201,11 @@ def build_props(
     每句 narration →
       1) edge-tts 配音（落 remotion/public/compose/<job_id>/），拿到真实时长
          —— MINIMAX_AUDIO_MODE=only 时跳过这步，声音全交给 H3 空镜的原生音轨，
-            每句时长按 MINIMAX_DURATION 排（见 minimax_service.audio_mode）
+            每句时长按 MINIMAX_DURATION 排（见 video_provider.audio_mode）；
+            collage provider 的成片强制无声，永远走 TTS 旁白
       2) 上区画面来源，按优先级：
-         a) with_video 且这句适合实拍 → MiniMax H3 生成空镜视频（visualType='video'）
+         a) with_video 且这句适合配画面 → 当前 video_provider 生成空镜视频（visualType='video'）
+            provider 由 VIDEO_PROVIDER 选：minimax=实拍空镜（默认）/ collage=半调纸拼贴组装动画
          b) 否则 with_scene → 信息动画 scene（visualType='scene'：关键词/图标/步骤/箭头/对比）
          c) 都关 → 纯字幕（上区留底色）
 
@@ -210,15 +215,15 @@ def build_props(
         job_id: 本次成片标识（用作 public 子目录名，通常是 project_id）
         progress_cb: 可选进度回调 (percent:int, message:str)
         with_scene: 是否为每句生成信息动画 scene（关掉则上区留暖底，纯字幕）
-        with_video: 是否用 MiniMax H3 生成实拍空镜（None=默认开，除非 MINIMAX_DISABLE=1）。
-                    生成失败/该句不适合实拍时，自动回退到 scene。
+        with_video: 是否用当前 video_provider 生成空镜（None=默认开，除非该 provider 的
+                    *_DISABLE=1）。生成失败/该句不适合配画面时，自动回退到 scene。
 
     Returns:
         Remotion inputProps dict（audioSrc/visualSrc 为 staticFile 相对路径）
     """
     # 旁白是否还要合成：MINIMAX_AUDIO_MODE=only 时整条声音交给 H3 的原生音轨，不跑 TTS
     # （此时 edge-tts 装没装都无所谓，不能因此拦住成片）。
-    narration_on = minimax_service.narration_enabled()
+    narration_on = video_provider.narration_enabled()
     if narration_on and not tts.is_available():
         raise ComposeNotReady("edge-tts 未安装，无法生成配音。请 pip install edge-tts。")
 
@@ -266,16 +271,18 @@ def build_props(
 
     scene_service = get_scene_service() if with_scene else None
 
-    # 实拍素材路线：这是默认成片形态（用户点「生成视频」即走实拍 + Remotion，零额外操作）。
-    # with_video 缺省(None)=默认开启；可用环境变量 MINIMAX_DISABLE=1 全局强制关闭（调试/省钱）。
-    # 仅当开启且已配 API Key 时才真正生效——否则整条自动回退信息动画，绝不中断成片。
+    # 空镜素材路线：这是默认成片形态（用户点「生成视频」即走空镜 + Remotion，零额外操作）。
+    # 画面风格由 VIDEO_PROVIDER 决定（minimax=实拍 / collage=纸拼贴），见 video_provider。
+    # with_video 缺省(None)=默认开启；对应 provider 的 *_DISABLE=1 可全局强制关闭（调试/省钱）。
+    # 仅当开启且该 provider 已就绪（配了 key）时才真正生效——否则整条自动回退信息动画，绝不中断成片。
     if with_video is None:
-        with_video = not minimax_service.disabled()
-    video_on = bool(with_video) and minimax_service.is_available()
+        with_video = not video_provider.disabled()
+    video_on = bool(with_video) and video_provider.is_available()
     if with_video and not video_on:
-        logger.warning("实拍素材已启用，但 MiniMax 不可用（未配 MINIMAX_API_KEY），整条回退信息动画。")
+        logger.warning("空镜素材已启用，但 provider=%s 不可用（未配 key 或依赖缺失），整条回退信息动画。",
+                       video_provider.name())
     video_prompt_service = get_video_prompt_service() if video_on else None
-    max_credits = minimax_service.max_cost() if video_on else None
+    max_credits = video_provider.max_cost() if video_on else None
     spent_credits = 0.0  # 累计已估成本，超上限后停止再生
 
     # —— 阶段 A：逐句配音（快，串行）——先拿到每句真实时长，供后续 scene/视频落界。
@@ -296,7 +303,7 @@ def build_props(
                 logger.warning(f"第 {idx} 句 TTS 失败，改用无配音兜底: {e}")
         has_audio = narration_on and seconds > 0 and audio_path.exists()
         if not has_audio:
-            seconds = float(minimax_service.clip_seconds()) if not narration_on \
+            seconds = float(video_provider.clip_seconds()) if not narration_on \
                 else FALLBACK_SECONDS_PER_SENTENCE
 
         out_segments.append({
@@ -313,8 +320,8 @@ def build_props(
             stage = "配音" if narration_on else "排轨"
             progress_cb(10 + int((idx + 1) / total_sentences * 20), f"{stage} {idx + 1}/{total_sentences}")
 
-    # —— 阶段 B：实拍素材（慢，并发）——先为每句判是否配实拍并估价（LLM，串行且快），
-    # 再把要生成的句子丢线程池并发调 MiniMax，把 N×(1~3min) 压成并行。
+    # —— 阶段 B：空镜素材（慢，并发）——先为每句判是否配画面并估价（LLM，串行且快），
+    # 再把要生成的句子丢线程池并发调当前 video_provider，把 N×(1~3min) 压成并行。
     if video_prompt_service is not None:
         if progress_cb:
             progress_cb(30, "设计画面中…")
@@ -324,7 +331,7 @@ def build_props(
             vp = video_prompt_service.build(sentence, role=role, context_title=title, style=style)
             if not (vp.get("visual") and vp.get("prompt")):
                 continue
-            cost = minimax_service.estimate_cost(vp["prompt"]) or 0.0
+            cost = video_provider.estimate_cost(vp["prompt"]) or 0.0
             if max_credits is not None and (spent_credits + cost) > max_credits:
                 logger.warning(
                     "实拍素材达成本上限 %.1f（已排 %.1f），第 %d 句起回退信息动画。",
@@ -337,10 +344,13 @@ def build_props(
         # B2) 并发生成。generate_clip 内部含缓存/下载/降级，失败返回 None（该句自然回退 scene）。
         done = 0
         total_gen = len(to_generate)
-        logger.info("实拍并发生成：%d 句待生成，并发数 %d", total_gen, VIDEO_CONCURRENCY)
+        # 进度文案跟着风格走：用户看到的是「生成实拍」还是「生成拼贴」
+        gen_label = "拼贴" if video_provider.name() == "collage" else "实拍"
+        logger.info("空镜并发生成（provider=%s）：%d 句待生成，并发数 %d",
+                    video_provider.name(), total_gen, VIDEO_CONCURRENCY)
         if total_gen:
             def _gen(idx: int, prompt: str):
-                src = minimax_service.generate_clip(
+                src = video_provider.generate_clip(
                     prompt, public_dir, rel_prefix=f"compose/{job_id}",
                     cache_key=sentence_items[idx][0],  # 句子原文做缓存键，同句复用
                 )
@@ -352,14 +362,14 @@ def build_props(
                     try:
                         idx, src = fut.result()
                     except Exception as e:  # noqa: BLE001
-                        logger.warning("实拍生成线程异常，跳过: %s", e)
+                        logger.warning("空镜生成线程异常，跳过: %s", e)
                         continue
                     if src:
                         out_segments[idx]["visualType"] = "video"
                         out_segments[idx]["visualSrc"] = src
                     done += 1
                     if progress_cb:
-                        progress_cb(30 + int(done / total_gen * 25), f"生成实拍 {done}/{total_gen}")
+                        progress_cb(30 + int(done / total_gen * 25), f"生成{gen_label} {done}/{total_gen}")
 
     # —— 阶段 C：每句都生成 scene（信息动画视觉脚本）；实拍句额外算一套呼应画面色调的组件 theme ——
     # 实拍句：scene 作为组件叠在视频上（前端 SceneStage overlay 模式）；组件 accent 取自视频主色，
@@ -393,9 +403,10 @@ def build_props(
         "style": style or None,
         "theme": theme,
         "captionStyle": _normalize_caption_style(caption_style),
-        # 实拍素材自带音轨的音量：H3 出片带与画面同步的原生环境音。
+        # 空镜素材自带音轨的音量：H3 出片带与画面同步的原生环境音。
         # mix（默认）压低垫在旁白下；only 全量且没有旁白；off 静音（历史行为）。
-        "videoVolume": minimax_service.clip_volume(),
+        # collage provider 恒 0（拼贴成片本身无声）。
+        "videoVolume": video_provider.clip_volume(),
         "titleDurationInFrames": _seconds_to_frames(TITLE_SECONDS),
         "outroDurationInFrames": _seconds_to_frames(OUTRO_SECONDS),
         "segments": out_segments,
@@ -406,7 +417,7 @@ def build_props(
         json.dump(props, f, ensure_ascii=False, indent=2)
     logger.info(
         f"已写 Remotion props: {props_path}（{len(out_segments)} 句, 信息动画={with_scene}, "
-        f"声音={minimax_service.audio_mode()}/旁白={narration_on}）"
+        f"声音={video_provider.audio_mode()}/旁白={narration_on}）"
     )
 
     return props

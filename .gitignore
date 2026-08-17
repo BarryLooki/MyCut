@@ -123,6 +123,8 @@ secrets/
 .env.local
 .env.development.local
 .env.test.local
+# 线上真配置（只存在于服务器 /home/admin/MyCut/.env.production），别让它被误提交
+.env.production
 .env.production.local
 .env.backup
 .env.*.backup

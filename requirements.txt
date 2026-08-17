@@ -31,5 +31,8 @@ edge-tts
 # desktop build shipped without them and any provider call failed. Bundle them
 # so the desktop app works out of the box.
 openai>=1.0.0
+# 拼贴空镜（collage_service）默认走 OpenRouter 静帧 + MiniMax 首尾帧，两条都是纯 requests，
+# **不需要**这个 SDK。只有把 COLLAGE_VIDEO_ENGINE 切成 omni（Gemini Omni Flash）时才要 >=2.10.0
+# （Interactions API 的下限）；静帧切 gemini 直连 1.x 就够。所以这里不抬版本，避免全员重装。
 google-genai>=1.0.0
 dashscope>=1.10.0
