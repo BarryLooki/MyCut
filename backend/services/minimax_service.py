@@ -319,7 +319,15 @@ def _submit(prompt: str, duration: int, aspect: str) -> str:
 
 
 def _query(task_id: str) -> Dict[str, Any]:
-    """查一次任务状态，返回 items[0]（查不到返回空 dict）。"""
+    """
+    查一次任务状态，返回**这个 task_id 对应**的那条（查不到返回空 dict → 上层继续等）。
+
+    ⚠ 别改回 items[0]。这个接口**根本不按 task_id 过滤**：不管传谁，它都回账号下
+    近期全部任务（带 total 字段），且按提交时间倒序。串行生成时我们刚提交的那条恰好排第一，
+    取 items[0] 侥幸一直是对的；**两段视频并发在飞时，两个轮询都会拿到"后提交那条"的 URL，
+    于是两句话下到同一段视频**（2026-08-18 混排首测：实拍句的缓存文件里装着拼贴动画）。
+    所以必须自己按 id 对号入座。
+    """
     resp = requests.get(
         f"{_base_url()}/v2/query/video_generation",
         headers=_headers(),
@@ -328,15 +336,23 @@ def _query(task_id: str) -> Dict[str, Any]:
     )
     data = _parse(resp)
     items = data.get("items") or []
-    return items[0] if items and isinstance(items[0], dict) else {}
+    want = str(task_id).strip()
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        if str(it.get("task_id") or it.get("id") or "").strip() == want:
+            return it
+    return {}
 
 
 def _wait_for_url(task_id: str) -> str:
     """轮询任务直到成功，返回成品 mp4 的下载地址。失败/超时抛异常。"""
     deadline = time.time() + POLL_TIMEOUT
+    seen = False  # 是否在任务列表里见过它（没见过 ≠ 没生成，见 _query 注释）
     while time.time() < deadline:
         time.sleep(POLL_INTERVAL)
         item = _query(task_id)
+        seen = seen or bool(item)
         status = str(item.get("status") or "").strip().lower()
         if status in _DONE_OK:
             url = str((item.get("content") or {}).get("url") or "").strip()
@@ -349,7 +365,10 @@ def _wait_for_url(task_id: str) -> str:
         if status in _DONE_BAD:
             raise RuntimeError(f"任务 {task_id} 生成失败: {str(item)[:300]}")
         # running / queueing / preparing / 空（任务刚建还查不到）→ 继续等
-    raise RuntimeError(f"任务 {task_id} 等待超时（{POLL_TIMEOUT}s）")
+    raise RuntimeError(
+        f"任务 {task_id} 等待超时（{POLL_TIMEOUT}s）"
+        + ("" if seen else "：整个轮询期间它都没出现在任务列表里，可能被接口分页截掉了")
+    )
 
 
 # —— 缓存与下载 ——
