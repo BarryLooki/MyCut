@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from ...core.auth import require_user_id
 from ...core.database import get_db
 from ...services.script_service import get_script_service
 from ...services.script_repo import ScriptRepo
@@ -98,6 +99,8 @@ async def create_script(request: ScriptRequest) -> List[Dict[str, Any]]:
 
 
 # ============ 文案持久化（保存/列表/详情/更新/删除）============
+# 都按 user_id 隔离：文案库是用户私有数据，不能跨账号可见/可改。
+# 未开启认证时 require_user_id 回落到 LOCAL_USER_ID，本地单机照常可用。
 
 class SavedScriptPayload(BaseModel):
     title: str = Field(..., description="选题标题")
@@ -126,40 +129,60 @@ def _payload_to_dict(p: SavedScriptPayload) -> Dict[str, Any]:
 
 
 @router.post("")
-async def save_script(payload: SavedScriptPayload, repo: ScriptRepo = Depends(get_script_repo)) -> Dict[str, Any]:
-    """保存一篇文案。"""
+async def save_script(
+    payload: SavedScriptPayload,
+    repo: ScriptRepo = Depends(get_script_repo),
+    user_id: str = Depends(require_user_id),
+) -> Dict[str, Any]:
+    """保存一篇文案（归属当前用户）。"""
     if not payload.title.strip():
         raise HTTPException(status_code=400, detail="title 不能为空")
-    return repo.create(_payload_to_dict(payload))
+    return repo.create(_payload_to_dict(payload), user_id=user_id)
 
 
 @router.get("")
-async def list_scripts(repo: ScriptRepo = Depends(get_script_repo)) -> List[Dict[str, Any]]:
-    """我的文案列表（按更新时间倒序）。"""
-    return repo.list()
+async def list_scripts(
+    repo: ScriptRepo = Depends(get_script_repo),
+    user_id: str = Depends(require_user_id),
+) -> List[Dict[str, Any]]:
+    """我的文案列表（按更新时间倒序，只含自己的）。"""
+    return repo.list(user_id=user_id)
 
 
 @router.get("/{script_id}")
-async def get_script(script_id: str, repo: ScriptRepo = Depends(get_script_repo)) -> Dict[str, Any]:
+async def get_script(
+    script_id: str,
+    repo: ScriptRepo = Depends(get_script_repo),
+    user_id: str = Depends(require_user_id),
+) -> Dict[str, Any]:
     """文案详情。"""
-    s = repo.get(script_id)
+    s = repo.get(script_id, user_id=user_id)
     if not s:
         raise HTTPException(status_code=404, detail="文案不存在")
     return s
 
 
 @router.put("/{script_id}")
-async def update_script(script_id: str, payload: SavedScriptPayload, repo: ScriptRepo = Depends(get_script_repo)) -> Dict[str, Any]:
+async def update_script(
+    script_id: str,
+    payload: SavedScriptPayload,
+    repo: ScriptRepo = Depends(get_script_repo),
+    user_id: str = Depends(require_user_id),
+) -> Dict[str, Any]:
     """更新文案。"""
-    s = repo.update(script_id, _payload_to_dict(payload))
+    s = repo.update(script_id, _payload_to_dict(payload), user_id=user_id)
     if not s:
         raise HTTPException(status_code=404, detail="文案不存在")
     return s
 
 
 @router.delete("/{script_id}")
-async def delete_script(script_id: str, repo: ScriptRepo = Depends(get_script_repo)) -> Dict[str, str]:
+async def delete_script(
+    script_id: str,
+    repo: ScriptRepo = Depends(get_script_repo),
+    user_id: str = Depends(require_user_id),
+) -> Dict[str, str]:
     """删除文案。"""
-    if not repo.delete(script_id):
+    if not repo.delete(script_id, user_id=user_id):
         raise HTTPException(status_code=404, detail="文案不存在")
     return {"message": "已删除", "id": script_id}

@@ -80,6 +80,12 @@ def create_app(mode: str = "web") -> FastAPI:
         import backend.models  # noqa: F401  触发模型注册
         Base.metadata.create_all(bind=engine)
         logger.info("数据库表创建完成")
+
+        # create_all 不给已存在的表加列，老库需要显式补 user_id（幂等，只加列不动数据）
+        from backend.core.schema_migrations import ensure_owner_columns
+        added = ensure_owner_columns()
+        if added:
+            logger.info("已为老表补上 user_id 列: %s", ", ".join(added))
         
         # 加载 API 密钥到环境变量
         api_key = get_api_key()

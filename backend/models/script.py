@@ -14,6 +14,15 @@ class Script(BaseModel):
 
     __tablename__ = "scripts"
 
+    # 归属用户（Supabase user 的 uuid / sub）。与 Project.user_id 同语义：
+    # nullable=True 兼容加列前的老文案，index 便于按用户过滤。
+    user_id = Column(
+        String(64),
+        nullable=True,
+        index=True,
+        comment="归属用户ID（Supabase user id），用于文案按用户隔离",
+    )
+
     title = Column(String(255), nullable=False, comment="选题标题")
     domain = Column(String(255), nullable=True, comment="领域方向")
     angle = Column(Text, nullable=True, comment="切入角度")

@@ -1,4 +1,10 @@
-"""文案持久化 CRUD（阶段: 文案保存）。"""
+"""文案持久化 CRUD（阶段: 文案保存）。
+
+按用户隔离：所有方法都收一个可选的 user_id。
+- user_id 为 None：不做归属校验（未开启认证的本地模式、或后台任务内部调用）。
+- user_id 有值：只能看到/改到自己的文案；归属为空的老文案也看不到
+  （跑 `python -m backend.migrate_user_isolation --owner <user_id>` 认领）。
+"""
 
 from __future__ import annotations
 
@@ -30,8 +36,9 @@ class ScriptRepo:
     def __init__(self, db: Session):
         self.db = db
 
-    def create(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def create(self, data: Dict[str, Any], user_id: Optional[str] = None) -> Dict[str, Any]:
         s = Script(
+            user_id=user_id,
             title=data.get("title", "未命名文案"),
             domain=data.get("domain"),
             angle=data.get("angle"),
@@ -47,16 +54,33 @@ class ScriptRepo:
         self.db.refresh(s)
         return _to_dict(s)
 
-    def list(self) -> List[Dict[str, Any]]:
-        rows = self.db.query(Script).order_by(Script.updated_at.desc()).all()
+    def list(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        query = self.db.query(Script)
+        if user_id is not None:
+            query = query.filter(Script.user_id == user_id)
+        rows = query.order_by(Script.updated_at.desc()).all()
         return [_to_dict(s) for s in rows]
 
-    def get(self, script_id: str) -> Optional[Dict[str, Any]]:
+    def _get_owned(self, script_id: str, user_id: Optional[str]) -> Optional[Script]:
+        """按归属取 ORM 对象；不属于该用户时返回 None（对外等价 404）。"""
         s = self.db.query(Script).filter(Script.id == script_id).first()
+        if not s:
+            return None
+        if user_id is not None and s.user_id != user_id:
+            return None
+        return s
+
+    def get(self, script_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        s = self._get_owned(script_id, user_id)
         return _to_dict(s) if s else None
 
-    def update(self, script_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        s = self.db.query(Script).filter(Script.id == script_id).first()
+    def update(
+        self,
+        script_id: str,
+        data: Dict[str, Any],
+        user_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        s = self._get_owned(script_id, user_id)
         if not s:
             return None
         for field in ("title", "domain", "angle", "target_audience", "keywords",
@@ -67,8 +91,8 @@ class ScriptRepo:
         self.db.refresh(s)
         return _to_dict(s)
 
-    def delete(self, script_id: str) -> bool:
-        s = self.db.query(Script).filter(Script.id == script_id).first()
+    def delete(self, script_id: str, user_id: Optional[str] = None) -> bool:
+        s = self._get_owned(script_id, user_id)
         if not s:
             return False
         self.db.delete(s)

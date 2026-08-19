@@ -58,12 +58,14 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate, ProjectR
 
         - user_id 为 None（未开启认证）：不做归属校验，退回按 id 取。
         - user_id 有值：项目不属于该用户时返回 None（对外等价 404，不泄露他人数据）。
-          兼容 user_id 为空的老项目（视为公共，任何登录用户可见）。
+          归属为空（user_id IS NULL）的项目一律不给登录用户看——它们是历史遗留的
+          无主数据，早期"视为公共"的放行会让所有账号互相看见彼此的成片。
+          需要保留就跑 `python -m backend.migrate_user_isolation --owner <user_id>` 认领。
         """
         project = self.get(project_id)
         if not project:
             return None
-        if user_id is not None and project.user_id not in (None, user_id):
+        if user_id is not None and project.user_id != user_id:
             return None
         return project
     
@@ -134,9 +136,10 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate, ProjectR
         # 不复用父类 exact-match 的 find_by（它会静默丢掉 search，且不带排序）。
         query = self.db.query(Project)
 
-        # 按用户隔离：user_id 有值时只看自己的（含 user_id 为空的老公共项目）。
+        # 按用户隔离：user_id 有值时只看自己的。无主项目（user_id IS NULL）不算公共，
+        # 谁都看不到——否则任一账号登录后都会看见别人的成片。见 get_owned 注释。
         if user_id is not None:
-            query = query.filter(or_(Project.user_id == user_id, Project.user_id.is_(None)))
+            query = query.filter(Project.user_id == user_id)
 
         if filters:
             if filters.status is not None:

@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from ...core.auth import require_user_id
 from ...core.database import get_db
 from ...schemas.project import ProjectCreate
 from ...models.project import ProjectStatus, ProjectType
@@ -52,8 +53,13 @@ def compose_ready() -> dict:
 def compose_from_script(
     req: ComposeFromScriptRequest,
     db: Session = Depends(get_db),
+    user_id: str = Depends(require_user_id),
 ) -> ComposeFromScriptResponse:
-    """根据保存的文案启动自动成片，返回承载产物的项目 ID。"""
+    """根据保存的文案启动自动成片，返回承载产物的项目 ID。
+
+    成片项目必须归属到发起人（user_id），否则它会以无主项目落库，
+    在项目列表里被所有登录账号看见。
+    """
     # 依赖预检——未就绪就别建项目，直接给友好提示
     if not compose_service.is_ready():
         raise HTTPException(
@@ -66,7 +72,8 @@ def compose_from_script(
             detail="edge-tts 未安装。请 pip install edge-tts 后重试。",
         )
 
-    script = ScriptRepo(db).get(req.script_id)
+    # 按归属取文案：不是自己的文案等价 404，不能拿别人的文案去成片
+    script = ScriptRepo(db).get(req.script_id, user_id=user_id)
     if not script:
         raise HTTPException(status_code=404, detail="文案不存在")
 
@@ -83,7 +90,7 @@ def compose_from_script(
         source_file=None,
         settings={"compose": True, "script_id": req.script_id},
     )
-    project = project_service.create_project(project_data)
+    project = project_service.create_project(project_data, user_id=user_id)
     project_id = str(project.id)
 
     # 派发渲染任务（桌面模式自动后台线程执行）

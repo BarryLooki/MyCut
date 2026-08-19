@@ -16,6 +16,16 @@ import os
 project_root = Path(__file__).parent.parent.parent
 sys.path.append(str(project_root))
 
+# ⚠️ 必须在任何 backend.* 被导入之前把数据库指向一个临时文件。
+# 原因：`backend/core/database.py` 在导入时就按 DATABASE_URL 建 engine，而
+# test_repositories.py 的 fixture 会调 `reset_database()`（drop_all + create_all）。
+# 不隔离的话，跑一次测试就会把开发用的 data/autoclip.db 整库清空（真踩过）。
+# conftest.py 由 pytest 先于测试模块导入，所以这里设置来得及。
+_real_db_url = os.environ.get("DATABASE_URL", "")
+if not _real_db_url or "data/autoclip.db" in _real_db_url:
+    _test_db_dir = tempfile.mkdtemp(prefix="mycut-test-db-")
+    os.environ["DATABASE_URL"] = f"sqlite:///{Path(_test_db_dir) / 'test.db'}"
+
 
 @pytest.fixture(scope="session")
 def test_data_dir(tmp_path_factory):
