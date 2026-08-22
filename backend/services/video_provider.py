@@ -177,13 +177,15 @@ def generate_clip(
     rel_prefix: str = "",
     cache_key: str = "",
     style: str = "",
+    overlay_side: str = "",
 ) -> Optional[str]:
     """
     生成一段空镜，返回 Remotion 用的相对路径；失败返回 None（该句由上层回退信息动画）。
 
     style 只在 mixed 模式下起作用（见 provider_for_style），单一模式下被忽略。
+    overlay_side 两个 provider 都认（各自用自己的措辞把主体推到另一侧），见 overlay_safe_zone。
     """
     return _for_style(style).generate_clip(
         prompt, dest_dir, duration=duration, aspect=aspect,
-        rel_prefix=rel_prefix, cache_key=cache_key,
+        rel_prefix=rel_prefix, cache_key=cache_key, overlay_side=overlay_side,
     )

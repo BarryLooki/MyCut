@@ -57,6 +57,7 @@ from typing import Any, Dict, Optional
 import requests
 
 from ..core.path_utils import get_project_root, get_settings_file_path
+from . import overlay_safe_zone
 
 logger = logging.getLogger(__name__)
 
@@ -373,15 +374,18 @@ def _wait_for_url(task_id: str) -> str:
 
 # —— 缓存与下载 ——
 
-def _cache_name(cache_key: str, duration: int, aspect: str) -> str:
+def _cache_name(cache_key: str, duration: int, aspect: str, overlay_side: str = "") -> str:
     """
-    按 (model, resolution, cache_key, duration, ratio) 内容 hash 命名，供缓存复用。
+    按 (model, resolution, cache_key, duration, ratio, 留白侧) 内容 hash 命名，供缓存复用。
 
     cache_key 应传**稳定的句子原文**，而非 LLM 生成的英文 prompt——后者每次生成都有
     细微差别，hash 每次都变，缓存永不命中、重复扣费。用句子原文才能让「同一句话复用
     同一段视频」。
+    overlay_side 进 hash：主体在左还是在右是两种不同构图，同一句换了侧别必须重生，
+    否则叠加组件会压住主体（见 overlay_safe_zone）。
     """
-    key = f"{_model()}|{_resolution()}|{cache_key}|{duration}|{_ratio(aspect)}".encode("utf-8")
+    key = (f"{_model()}|{_resolution()}|{cache_key}|{duration}|{_ratio(aspect)}"
+           f"|{overlay_safe_zone.normalize(overlay_side)}").encode("utf-8")
     return "mm_" + hashlib.sha1(key).hexdigest()[:16] + ".mp4"
 
 
@@ -440,6 +444,7 @@ def generate_clip(
     aspect: str = DEFAULT_ASPECT,
     rel_prefix: str = "",
     cache_key: str = "",
+    overlay_side: str = "",
 ) -> Optional[str]:
     """
     生成一段实拍空镜并落到 dest_dir，返回相对 remotion/public/ 的 staticFile 路径。
@@ -452,6 +457,8 @@ def generate_clip(
         aspect: 画面比例（对应 v2 的 ratio 字段）
         rel_prefix: 返回相对路径的前缀（如 'compose/<job_id>'），拼到文件名前
         cache_key: 缓存键，应传**稳定的句子原文**（缺省回退用 prompt）。同 key 复用同一段视频。
+        overlay_side: 'left'/'right' —— 这一侧留空给 Remotion 组件，主体推到另一侧
+                      （见 overlay_safe_zone）。缺省/非法 = 不加构图约束。
 
     Returns:
         staticFile 相对路径（如 'compose/<job_id>/mm_xxx.mp4'）；失败 None
@@ -463,9 +470,15 @@ def generate_clip(
         return None
     seconds = max(DURATION_RANGE[0], min(DURATION_RANGE[1], duration)) if duration else _duration()
 
+    # 构图约束追加在提示词末尾：把主体推到留白侧的对面，别让叠加组件挡住它
+    side = overlay_safe_zone.normalize(overlay_side)
+    hint = overlay_safe_zone.live_hint(side)
+    if hint:
+        prompt = prompt.rstrip(" .,") + ". " + hint
+
     # 缓存键用句子原文（稳定）；没传则退回 prompt（不稳定，仅兜底）
     key = (cache_key or "").strip() or prompt
-    fname = _cache_name(key, seconds, aspect)
+    fname = _cache_name(key, seconds, aspect, side)
     dest = dest_dir / fname
     rel = f"{rel_prefix}/{fname}" if rel_prefix else fname
 
@@ -490,8 +503,8 @@ def generate_clip(
     # 3) 未命中：真正生成
     try:
         task_id = _submit(prompt, seconds, aspect)
-        logger.info("MiniMax 任务已提交（model=%s, %ss, %s, %s）: %s",
-                    _model(), seconds, _resolution(), _ratio(aspect), task_id)
+        logger.info("MiniMax 任务已提交（model=%s, %ss, %s, %s, 留白=%s）: %s",
+                    _model(), seconds, _resolution(), _ratio(aspect), side or "无", task_id)
         url = _wait_for_url(task_id)
     except Exception as e:  # noqa: BLE001
         logger.warning("MiniMax 生成失败，回退: %s", e)

@@ -11,7 +11,7 @@ import {
 } from 'remotion'
 import { TransitionSeries, linearTiming } from '@remotion/transitions'
 import { fade } from '@remotion/transitions/fade'
-import { Scene, SceneTheme } from './SceneStage'
+import { OverlaySide, Scene, SceneTheme } from './SceneStage'
 import { VisualStage, VisualType } from './VisualStage'
 import { CN_FONT_STACK } from './fonts'
 
@@ -43,6 +43,9 @@ export type CaptionSegment = {
   visualSrc?: string | null // 素材文件路径（相对 remotion/public/，或 http(s)/data）
   scene?: Scene | null // 该句的信息动画视觉脚本；null/空则上区留暖底
   overlayTheme?: SceneTheme | null // 实拍句叠加组件专用 theme（accent 取自视频主色，呼应画面）
+  // 有素材那句，组件叠在哪一侧的安全带里（'left'|'right'）。后端在生成画面时就把主体
+  // 推到了另一侧、这一侧留干净负空间，所以两边必须用同一个值，见 SceneStage 的 BAND。
+  overlaySide?: OverlaySide | null
   durationInFrames: number
   role?: string // hook | body | cta
   // 混排（VIDEO_PROVIDER=mixed）时这句画面实际来自哪个 provider：'minimax' 实拍 / 'collage' 纸拼贴。
@@ -150,6 +153,7 @@ const CaptionCard: React.FC<{
           scene={segment.scene}
           theme={theme}
           overlayTheme={segment.overlayTheme}
+          overlaySide={segment.overlaySide}
           durationInFrames={segment.durationInFrames}
           // 逐句值优先（混排时每句不同），没给才用整条的缺省值
           videoVolume={segment.videoVolume ?? videoVolume}

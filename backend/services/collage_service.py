@@ -64,6 +64,7 @@ import requests
 from ..core.path_utils import get_project_root, get_settings_file_path
 from ..utils.ffmpeg_utils import get_ffmpeg_path
 from . import minimax_service as _mm
+from . import overlay_safe_zone
 
 logger = logging.getLogger(__name__)
 
@@ -379,17 +380,21 @@ def _palette_for(key: str) -> Tuple[str, str, str]:
     return PALETTE[h % len(PALETTE)]
 
 
-def _still_prompt(visual: str, aspect: str, color_name: str, color_hex: str, accents: str) -> str:
-    """Gate 2 的 imagegen prompt 模板（SKILL.md Phase 2），把一句视觉命题做成完成态静帧。"""
+def _still_prompt(visual: str, aspect: str, color_name: str, color_hex: str, accents: str,
+                  overlay_side: str = "") -> str:
+    """
+    Gate 2 的 imagegen prompt 模板（SKILL.md Phase 2），把一句视觉命题做成完成态静帧。
+
+    overlay_side：这一侧要留成空纸面，给 Remotion 组件用（见 overlay_safe_zone）。
+    空字符串 = 不预留，构图回到 skill 原来的「主体居中 70%」。
+    """
     return f"""Use case: ads-marketing
 Asset type: final still frame for a {aspect} image-to-video B-roll clip
 Primary request: Create a finished editorial paper-collage image expressing {visual}
 Scene/backdrop: perfectly flat {color_name} paper field {color_hex} with subtle uncoated paper fiber.
 Style/medium: premium editorial stop-motion paper collage; black-and-white halftone photographic \
 cut-outs mixed with selective {accents} colored cardstock.
-Composition/framing: {aspect} locked poster frame; central subject within the middle 70 percent; \
-generous clean color-field negative space; 3-6 large separable paper groups for later \
-assemble-from-empty animation.
+Composition/framing: {overlay_safe_zone.collage_framing(overlay_side, aspect)}.
 Materials/textures: visible printed halftone dots, crisp machine-cut edges, thin warm-cream paper \
 keylines, soft low-opacity physical drop shadows.
 Constraints: one single clear visual metaphor, readable at a glance, no clutter.
@@ -397,7 +402,7 @@ Avoid: no typography, no readable letters, no numerals, no logos, no watermark, 
 no glossy 3D, no photoreal environment, no clutter."""
 
 
-def _video_prompt(aspect: str, color_name: str, color_hex: str) -> str:
+def _video_prompt(aspect: str, color_name: str, color_hex: str, overlay_side: str = "") -> str:
     """
     Gate 3 的动画 prompt 模板（SKILL.md Phase 3）：从空色场逐件组装到给定完成帧。
     首句按引擎换措辞：omni 的两帧是 input 里的 Image 1/2，minimax 的两帧带 first/last_frame role。
@@ -411,13 +416,18 @@ def _video_prompt(aspect: str, color_name: str, color_hex: str) -> str:
                    f"and Image 2 as the exact completed last frame. In one continuous locked-off shot, "
                    f"open on the empty flat {color_name} paper field.")
 
+    # 留白带的约束也要进动画 prompt：否则纸片会横穿空的那一侧滑进来，
+    # 中途正好压在组件位置上（尾帧干净、过程脏，比全程都脏更难发现）。
+    reserve = overlay_safe_zone.collage_assembly_hint(overlay_side)
+    reserve_block = f"\n{reserve}\n" if reserve else ""
+
     return f"""{opening}
 
 Assemble the scene piece by piece with crisp physical stop-motion timing: bring in the largest \
 structural paper shapes first, then the main subject cut-outs, then the connecting pieces, then the \
 final action and result. Each piece slides in and snaps into place. End by holding the supplied \
 completed composition.
-
+{reserve_block}
 Preserve the exact {aspect} framing, {color_hex} color field, colored cardstock accents, uncoated \
 paper grain, halftone dots, cream keylines, crisp cut edges and soft shadows. Restrained tactile 2D \
 paper craft only.
@@ -767,16 +777,18 @@ def _gen_video(first: Path, last: Path, prompt: str, seconds: int, aspect: str, 
 
 # —— 缓存与对外入口 ——
 
-def _cache_name(cache_key: str, duration: int, aspect: str) -> str:
+def _cache_name(cache_key: str, duration: int, aspect: str, overlay_side: str = "") -> str:
     """
-    按 (两个引擎, 视频模型, 静帧模型集合, cache_key, 秒数, 比例) 内容 hash 命名。
+    按 (两个引擎, 视频模型, 静帧模型集合, cache_key, 秒数, 比例, 留白侧) 内容 hash 命名。
 
     cache_key 应传**稳定的句子原文**，而非 LLM 生成的英文 prompt——后者每次都有细微差别，
     hash 每次都变，缓存永不命中、重复扣费。
     engine 进 hash：换引擎等于换画面质感，旧缓存不该被当成新引擎的产物复用。
+    overlay_side 进 hash：留白在左还是在右是**两张不同构图**的图，
+    同一句话换了侧别必须重生，否则组件会压在主体上（正是这次要修的问题）。
     """
     key = (f"{_still_engine()}|{_video_engine()}|{_video_model()}|{','.join(_image_models())}"
-           f"|{cache_key}|{duration}|{aspect}").encode("utf-8")
+           f"|{cache_key}|{duration}|{aspect}|{overlay_safe_zone.normalize(overlay_side)}").encode("utf-8")
     return "cl_" + hashlib.sha1(key).hexdigest()[:16] + ".mp4"
 
 
@@ -792,6 +804,7 @@ def generate_clip(
     aspect: str = DEFAULT_ASPECT,
     rel_prefix: str = "",
     cache_key: str = "",
+    overlay_side: str = "",
 ) -> Optional[str]:
     """
     生成一段拼贴组装空镜并落到 dest_dir，返回相对 remotion/public/ 的 staticFile 路径。
@@ -804,6 +817,8 @@ def generate_clip(
         aspect: 画面比例（缺省 COLLAGE_ASPECT，默认 16:9）
         rel_prefix: 返回相对路径的前缀（如 'compose/<job_id>'）
         cache_key: 缓存键，应传**稳定的句子原文**。同 key 复用同一段视频。
+        overlay_side: 'left'/'right' —— 这一侧留成空纸面，给 Remotion 组件让位
+                      （见 overlay_safe_zone）。缺省/非法 = 不预留，主体居中。
 
     Returns:
         staticFile 相对路径（如 'compose/<job_id>/cl_xxx.mp4'）；失败 None
@@ -815,9 +830,10 @@ def generate_clip(
     seconds = _clamp_duration(duration) if duration else _duration()
     ratio = _aspect(aspect)
     frame_w, frame_h = _frame_dims(ratio)
+    side = overlay_safe_zone.normalize(overlay_side)
 
     key = (cache_key or "").strip() or prompt
-    fname = _cache_name(key, seconds, ratio)
+    fname = _cache_name(key, seconds, ratio, side)
     dest = dest_dir / fname
     rel = f"{rel_prefix}/{fname}" if rel_prefix else fname
     cached = get_cache_dir() / fname
@@ -849,9 +865,11 @@ def generate_clip(
         _check_ready()
 
         # 3a) 静帧（= 组装动画的完成态尾帧）
-        used = _gen_still(_still_prompt(prompt, ratio, color_name, color_hex, accents), raw_still, ratio)
-        logger.info("拼贴静帧完成（engine=%s model=%s, %s, %s）: %s",
-                    _still_engine(), used, ratio, color_name, raw_still.name)
+        used = _gen_still(
+            _still_prompt(prompt, ratio, color_name, color_hex, accents, side), raw_still, ratio
+        )
+        logger.info("拼贴静帧完成（engine=%s model=%s, %s, %s, 留白=%s）: %s",
+                    _still_engine(), used, ratio, color_name, side or "无", raw_still.name)
 
         # 3b) 统一尾帧像素 + 造同底色的纯色空首帧
         if not _fit_frame(raw_still, last_frame, frame_w, frame_h):
@@ -861,7 +879,7 @@ def generate_clip(
 
         # 3c) 首尾帧插值出组装动画
         if not _gen_video(first_frame, last_frame,
-                          _video_prompt(ratio, color_name, color_hex), seconds, ratio, raw_video):
+                          _video_prompt(ratio, color_name, color_hex, side), seconds, ratio, raw_video):
             raise RuntimeError("视频生成/下载失败")
 
         # 3d) 强制无声交付

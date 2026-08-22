@@ -177,6 +177,7 @@ class SceneService:
         # enterAt 的具体秒数不信 LLM（它只是凭 seconds 瞎猜，和真实配音节奏对不上），
         # 收集完后用音频时长重排（见下方 _distribute_enter_at）。
         elements: List[Dict[str, Any]] = []
+        seen_texts: set[str] = set()
         for el in raw_elements:
             if not isinstance(el, dict):
                 continue
@@ -186,6 +187,14 @@ class SceneService:
             text = str(el.get("text") or "").strip()
             if not text:
                 continue
+            # 同一句里文字重复的元素只留第一个。arrow/compare 是"前 → 后"「错 / 对」的对照版式，
+            # LLM 偶尔两边写同一个词（实拍过：箭头两端都是"耗时耗神"），渲出来就是两张一样的卡，
+            # 既看不懂又白占画面。
+            norm = _strip_punct(text)
+            if norm in seen_texts:
+                logger.info("组件文字与同句其他元素重复，丢弃: %s", text)
+                continue
+            seen_texts.add(norm)
             # 去重兜底：LLM 若照抄原句连续片段（和字幕重复），丢弃这个元素
             if _is_copied_from_sentence(text, sentence):
                 logger.info("组件文字照抄原句，丢弃避免与字幕重复: %s", text)

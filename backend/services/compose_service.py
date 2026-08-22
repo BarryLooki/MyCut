@@ -24,6 +24,7 @@ from ..utils.ffmpeg_utils import get_npx_path
 from ..utils import tts
 from .scene_service import get_scene_service
 from .theme_service import get_theme_service, DEFAULT_THEME
+from . import overlay_safe_zone
 from . import video_provider
 from .video_prompt_service import get_video_prompt_service
 
@@ -204,13 +205,19 @@ def build_props(
          —— MINIMAX_AUDIO_MODE=only 时跳过这步，声音全交给 H3 空镜的原生音轨，
             每句时长按 MINIMAX_DURATION 排（见 video_provider.audio_mode）；
             collage provider 的成片强制无声，永远走 TTS 旁白
-      2) 上区画面来源，按优先级：
+      2) with_scene → 信息动画 scene（关键词/图标/步骤/箭头/对比），并给有组件的句子
+         定一个「叠加安全侧」overlaySide（左右交替）
+      3) 上区画面来源，按优先级：
          a) with_video 且这句适合配画面 → 当前 video_provider 生成空镜视频（visualType='video'）
             画面风格由 VIDEO_PROVIDER 选：minimax=实拍空镜（默认）/ collage=半调纸拼贴 /
             mixed=**按句混排**（video_prompt_service 逐句判 visual_style：
             具体可实拍的走实拍、抽象关系走拼贴），逐句结果记在 segment.videoProvider
-         b) 否则 with_scene → 信息动画 scene（visualType='scene'：关键词/图标/步骤/箭头/对比）
+            —— 生成时把 overlaySide 一起传下去，让模型把主体推到组件的对面
+         b) 否则 scene 当完整信息动画用（visualType='scene'）
          c) 都关 → 纯字幕（上区留底色）
+
+    ⚠ 阶段顺序不能改：scene 必须在画面生成**之前**算完，因为 overlaySide 要拼进
+      画面生成的 prompt。反过来（先出画面再定组件位置）就是「组件压住画面主体」的成因。
 
     Args:
         script: ScriptRepo.get() 返回的 dict（含 title / segments / style）
@@ -324,12 +331,33 @@ def build_props(
             stage = "配音" if narration_on else "排轨"
             progress_cb(10 + int((idx + 1) / total_sentences * 20), f"{stage} {idx + 1}/{total_sentences}")
 
-    # —— 阶段 B：空镜素材（慢，并发）——先为每句判是否配画面并估价（LLM，串行且快），
+    # —— 阶段 B：逐句信息动画视觉脚本 + 给组件分配「叠加安全侧」——
+    # 必须排在画面生成之前：侧别要拼进画面生成的 prompt（把主体推到组件的对面），
+    # 生成完再定就来不及了。见 overlay_safe_zone 模块注释。
+    if scene_service is not None:
+        if progress_cb:
+            progress_cb(30, "设计组件中…")
+        overlay_count = 0
+        for idx, seg in enumerate(out_segments):
+            sentence, role = sentence_items[idx]
+            seg["scene"] = scene_service.build_scene(
+                sentence, seg["_seconds"], role=role, context_title=title
+            )
+            if (seg["scene"] or {}).get("elements"):
+                # 左右交替：一条片子里组件不总黏在同一边，观感不呆板；
+                # 且这个值确定可复现（同一份文案每次都排一样，缓存才有意义）。
+                seg["overlaySide"] = overlay_safe_zone.SIDES[overlay_count % len(overlay_safe_zone.SIDES)]
+                overlay_count += 1
+            if progress_cb:
+                progress_cb(30 + int((idx + 1) / total_sentences * 8),
+                            f"设计组件 {idx + 1}/{total_sentences}")
+
+    # —— 阶段 C：空镜素材（慢，并发）——先为每句判是否配画面并估价（LLM，串行且快），
     # 再把要生成的句子丢线程池并发调当前 video_provider，把 N×(1~3min) 压成并行。
     if video_prompt_service is not None:
         if progress_cb:
-            progress_cb(30, "设计画面中…")
-        # B1) 逐句出视频 prompt + 估价，按额度上限筛出真正要生成的句子（串行，保证额度累加确定）
+            progress_cb(38, "设计画面中…")
+        # C1) 逐句出视频 prompt + 估价，按额度上限筛出真正要生成的句子（串行，保证额度累加确定）
         to_generate: List[tuple] = []  # (idx, prompt, visual_style)
         for idx, (sentence, role) in enumerate(sentence_items):
             vp = video_prompt_service.build(sentence, role=role, context_title=title, style=style)
@@ -348,7 +376,7 @@ def build_props(
             spent_credits += cost
             to_generate.append((idx, vp["prompt"], vstyle))
 
-        # B2) 并发生成。generate_clip 内部含缓存/下载/降级，失败返回 None（该句自然回退 scene）。
+        # C2) 并发生成。generate_clip 内部含缓存/下载/降级，失败返回 None（该句自然回退 scene）。
         done = 0
         total_gen = len(to_generate)
         # 进度文案跟着风格走：用户看到的是「生成实拍」/「生成拼贴」，混排时两种都有就叫「画面」
@@ -367,6 +395,8 @@ def build_props(
                     prompt, public_dir, rel_prefix=f"compose/{job_id}",
                     cache_key=sentence_items[idx][0],  # 句子原文做缓存键，同句复用
                     style=vstyle,
+                    # 这句的组件落在哪一侧 → 让模型把主体推到另一侧（阶段 B 已定好）
+                    overlay_side=out_segments[idx].get("overlaySide") or "",
                 )
                 return idx, src, vstyle
 
@@ -388,30 +418,23 @@ def build_props(
                         out_segments[idx]["videoVolume"] = video_provider.clip_volume_for(vstyle)
                     done += 1
                     if progress_cb:
-                        progress_cb(30 + int(done / total_gen * 25), f"生成{gen_label} {done}/{total_gen}")
+                        progress_cb(38 + int(done / total_gen * 20), f"生成{gen_label} {done}/{total_gen}")
 
-    # —— 阶段 C：每句都生成 scene（信息动画视觉脚本）；实拍句额外算一套呼应画面色调的组件 theme ——
-    # 实拍句：scene 作为组件叠在视频上（前端 SceneStage overlay 模式）；组件 accent 取自视频主色，
-    #         让组件配色和实拍画面同色系。overlayTheme 存到 segment，前端优先用它。
-    # 回退句：scene 作为完整信息动画（用整条统一 theme）。
+    # —— 阶段 D：素材句的组件呼应色 —— 抽这段素材的主色，给叠加组件配一套同色系 theme，
+    # 让卡片看起来是画面的一部分。必须排在画面生成之后（得先有视频文件才能抽色）。
+    # 回退句（没素材）不需要：scene 走完整信息动画，用整条统一 theme。
     theme_svc = get_theme_service()
-    if scene_service is not None:
-        for idx, seg in enumerate(out_segments):
-            sentence, role = sentence_items[idx]
-            seg["scene"] = scene_service.build_scene(
-                sentence, seg["_seconds"], role=role, context_title=title
-            )
-            # 实拍句：抽视频主色 → 生成呼应画面的组件 theme
-            if seg["visualType"] == "video" and seg.get("visualSrc"):
-                try:
-                    from .theme_service import probe_video_color
-                    video_file = public_dir / Path(seg["visualSrc"]).name
-                    vcolor = probe_video_color(video_file)
-                    seg["overlayTheme"] = theme_svc.theme_for_overlay(theme, vcolor)
-                except Exception as e:  # noqa: BLE001
-                    logger.warning("生成组件呼应色失败，用统一 theme: %s", e)
-            if progress_cb:
-                progress_cb(55 + int((idx + 1) / total_sentences * 5), f"画面 {idx + 1}/{total_sentences}")
+    for idx, seg in enumerate(out_segments):
+        if seg["visualType"] == "video" and seg.get("visualSrc"):
+            try:
+                from .theme_service import probe_video_color
+                video_file = public_dir / Path(seg["visualSrc"]).name
+                vcolor = probe_video_color(video_file)
+                seg["overlayTheme"] = theme_svc.theme_for_overlay(theme, vcolor)
+            except Exception as e:  # noqa: BLE001
+                logger.warning("生成组件呼应色失败，用统一 theme: %s", e)
+        if progress_cb:
+            progress_cb(58 + int((idx + 1) / total_sentences * 2), f"配色 {idx + 1}/{total_sentences}")
 
     # 清理内部字段
     for seg in out_segments:
@@ -437,9 +460,15 @@ def build_props(
         json.dump(props, f, ensure_ascii=False, indent=2)
     # 画面构成也记一笔：混排时最想知道的就是实拍/拼贴各占几句、几句回退了信息动画
     visual_mix = Counter(seg.get("videoProvider") or "scene" for seg in out_segments)
+    # 叠加组件落在哪一侧（素材句才有意义）：核对"组件是否躲开了画面主体"时第一眼要看的
+    side_mix = Counter(
+        seg.get("overlaySide") or "无组件"
+        for seg in out_segments if seg["visualType"] == "video"
+    )
     logger.info(
         f"已写 Remotion props: {props_path}（{len(out_segments)} 句, "
         f"画面={'/'.join(f'{k}×{v}' for k, v in sorted(visual_mix.items()))}, "
+        f"组件侧={'/'.join(f'{k}×{v}' for k, v in sorted(side_mix.items())) or '无'}, "
         f"模式={video_provider.name()}, 信息动画={with_scene}, "
         f"声音={video_provider.audio_mode()}/旁白={narration_on}）"
     )

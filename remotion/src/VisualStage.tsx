@@ -7,7 +7,7 @@ import {
   staticFile,
   useCurrentFrame,
 } from 'remotion'
-import { Scene, SceneStage, SceneTheme } from './SceneStage'
+import { OverlaySide, Scene, SceneStage, SceneTheme } from './SceneStage'
 
 /**
  * 上区视觉舞台——素材混剪路线的核心。
@@ -98,13 +98,15 @@ export const VisualStage: React.FC<{
   scene?: Scene | null
   theme: SceneTheme
   overlayTheme?: SceneTheme | null // 叠加组件专用 theme（accent 取自视频主色）；缺省用全局 theme
+  overlaySide?: OverlaySide | null // 叠加组件落在哪一侧安全带（后端出画面时已把主体推到另一侧）
   durationInFrames: number // 本片段时长（帧），用于 Ken Burns 推拉落界
   videoVolume?: number // 视频素材自带音轨音量 0~1；缺省 0 = 静音（旁白独占声道）
-}> = ({ visualType, visualSrc, scene, theme, overlayTheme, durationInFrames, videoVolume }) => {
+}> = ({ visualType, visualSrc, scene, theme, overlayTheme, overlaySide, durationInFrames, videoVolume }) => {
   const hasMedia = !!visualSrc && (visualType === 'video' || visualType === 'image-kenburns')
 
   // 有实拍/静图素材：铺为底层；若同时有 scene，把精致组件（SceneStage overlay 模式）
   // 叠在画面上——实底卡片 + 阴影悬浮，跳过浅色光斑背景。这样成片是「实拍视频 + Remotion 组件」。
+  // 组件只落在 overlaySide 那一侧的安全带里，不压画面主体（见 SceneStage 的 BAND 注释）。
   if (hasMedia) {
     return (
       <AbsoluteFill>
@@ -117,7 +119,9 @@ export const VisualStage: React.FC<{
         ) : (
           <ImageKenBurns src={visualSrc!} span={durationInFrames} />
         )}
-        {scene ? <SceneStage scene={scene} theme={overlayTheme || theme} overlay /> : null}
+        {scene ? (
+          <SceneStage scene={scene} theme={overlayTheme || theme} overlay side={overlaySide} />
+        ) : null}
       </AbsoluteFill>
     )
   }
