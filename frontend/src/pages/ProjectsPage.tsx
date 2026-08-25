@@ -8,7 +8,6 @@ import { toast } from 'sonner'
 
 import ProjectCard from '@/components/ProjectCard'
 import WorkspacePageHeader from '@/components/WorkspacePageHeader'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -155,9 +154,8 @@ const ProjectsPage = () => {
       <div className="mx-auto w-full max-w-[1240px]">
         <WorkspacePageHeader
           eyebrow="项目工作区"
-          title="项目"
+          title="我的项目"
           description="查看处理状态，继续最近的剪辑工作。"
-          titleAddon={!loading && <Badge variant="secondary" className="border-0 font-normal tabular-nums">{projects.length}</Badge>}
         >
           <Button type="button" size="lg" className="self-start sm:self-auto" onClick={() => navigate('/', { state: { focusUpload: true } })}>
             <Icon icon={uploadBold} className="text-white" />
