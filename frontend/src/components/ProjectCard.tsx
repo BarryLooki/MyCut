@@ -265,7 +265,8 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
     else navigate(`/project/${project.id}`)
   }
 
-  const category = categoryMap[project.video_category || 'default'] || categoryMap.default
+  const videoCategory = project.video_category || project.settings?.video_category || project.project_type || 'default'
+  const category = categoryMap[videoCategory] || categoryMap.default
   const canRetry = normalizedStatus === 'failed' || normalizedStatus === 'processing' || normalizedStatus === 'importing'
   const displayName = project.name.replace(/^成片(?:\s*[：:]\s*)?/, '').trim() || project.name
 
@@ -420,7 +421,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
           </div>
         )}
 
-        {project.video_category && project.video_category !== 'default' && (
+        {videoCategory !== 'default' && (
           <Badge variant="secondary" className="absolute left-3 top-3 border-0 bg-background/92 font-normal shadow-sm backdrop-blur-sm">
             {category}
           </Badge>
