@@ -131,7 +131,6 @@ const MembershipPage = () => {
       <div className="mx-auto w-full max-w-[1080px]">
         <WorkspacePageHeader
           id="membership-heading"
-          eyebrow="账户与方案"
           title="会员"
           description="查看当前等级，或升级到 Pro 解锁完整创作能力。"
         />

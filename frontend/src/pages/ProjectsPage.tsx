@@ -153,7 +153,6 @@ const ProjectsPage = () => {
     <main className="min-h-[calc(100svh-3.5rem)] bg-[var(--workspace-background)] px-4 pb-16 pt-16 sm:px-6 lg:px-8 lg:pb-20">
       <div className="mx-auto w-full max-w-[1240px]">
         <WorkspacePageHeader
-          eyebrow="项目工作区"
           title="我的项目"
           description="查看处理状态，继续最近的剪辑工作。"
         >

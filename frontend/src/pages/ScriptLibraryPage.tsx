@@ -134,9 +134,6 @@ const ScriptLibraryPage = () => {
     })
   }, [scripts, searchQuery, sortOption])
 
-  const totalSegments = scripts.reduce((sum, script) => sum + (script.segments?.length || 0), 0)
-  const totalDuration = scripts.reduce((sum, script) => sum + (script.est_duration || 0), 0)
-
   const handleEdit = (script: SavedScript) => navigate('/script', { state: { savedScript: script } })
 
   const handleUseForClip = (script: SavedScript) => {
@@ -193,20 +190,9 @@ const ScriptLibraryPage = () => {
     <main className="min-h-[calc(100svh-3.5rem)] bg-[var(--workspace-background)] px-4 pb-16 pt-16 sm:px-6 lg:px-8 lg:pb-20">
       <div className="mx-auto w-full max-w-[1240px]">
         <WorkspacePageHeader
-          eyebrow="内容工作区"
           title="文案库"
           description="集中管理选题、口播与分镜，并从这里继续剪辑或生成成片。"
-        >
-          {!loading && scripts.length > 0 && (
-            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
-              <span>{scripts.length} 篇文案</span>
-              <span className="size-1 rounded-full bg-border" />
-              <span>{totalSegments} 个分镜</span>
-              <span className="size-1 rounded-full bg-border" />
-              <span>预计 {formatDuration(totalDuration)}</span>
-            </div>
-          )}
-        </WorkspacePageHeader>
+        />
 
         <div className="mt-7 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
           <section aria-labelledby="library-list-heading">
