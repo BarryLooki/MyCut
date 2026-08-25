@@ -1,6 +1,10 @@
 import React, { useState } from 'react'
+import { Icon } from '@iconify/react'
+import addCircleBold from '@iconify-icons/solar/add-circle-bold'
+import documentTextLinear from '@iconify-icons/solar/document-text-linear'
+import tagLinear from '@iconify-icons/solar/tag-linear'
+import videoLibraryLinear from '@iconify-icons/solar/video-library-linear'
 import { Modal, Input, Checkbox, Typography, Button, Divider } from 'antd'
-import { PlusOutlined, TagOutlined, FileTextOutlined, VideoCameraOutlined } from '@ant-design/icons'
 import './CreateCollectionModal.css'
 
 const { Text, Title } = Typography
@@ -72,14 +76,11 @@ const CreateCollectionModal: React.FC<CreateCollectionModalProps> = ({
       footer={null}
       width={900}
       className="create-collection-modal"
-      destroyOnClose
+      destroyOnHidden
     >
       <div className="modal-content">
         {/* 头部 */}
         <div className="modal-header">
-          <div className="header-icon">
-            <PlusOutlined />
-          </div>
           <div className="header-text">
             <Title level={3} className="modal-title">创建新合集</Title>
             <Text className="modal-subtitle">将精选片段组合成一个主题合集</Text>
@@ -93,7 +94,7 @@ const CreateCollectionModal: React.FC<CreateCollectionModalProps> = ({
           {/* 合集标题 */}
           <div className="form-item">
             <div className="form-label">
-              <TagOutlined className="label-icon" />
+              <Icon icon={tagLinear} className="label-icon" />
               <Text strong>合集标题</Text>
               <span className="required-mark">*</span>
             </div>
@@ -110,7 +111,7 @@ const CreateCollectionModal: React.FC<CreateCollectionModalProps> = ({
           {/* 合集描述 */}
           <div className="form-item">
             <div className="form-label">
-              <FileTextOutlined className="label-icon" />
+              <Icon icon={documentTextLinear} className="label-icon" />
               <Text strong>合集描述</Text>
             </div>
             <TextArea
@@ -127,7 +128,7 @@ const CreateCollectionModal: React.FC<CreateCollectionModalProps> = ({
           {/* 选择片段 */}
           <div className="form-item">
             <div className="form-label">
-              <VideoCameraOutlined className="label-icon" />
+              <Icon icon={videoLibraryLinear} className="label-icon" />
               <Text strong>选择片段</Text>
               <span className="required-mark">*</span>
             </div>
@@ -198,6 +199,7 @@ const CreateCollectionModal: React.FC<CreateCollectionModalProps> = ({
             loading={loading}
             className="create-btn"
           >
+            <Icon icon={addCircleBold} className="size-4 text-white" />
             创建合集
           </Button>
         </div>

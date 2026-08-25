@@ -1,4 +1,6 @@
 import React from 'react'
+import { Icon } from '@iconify/react'
+import fileTextBold from '@iconify-icons/solar/file-text-bold'
 import { Button } from 'antd'
 import { TopicCard as TopicCardData } from '../services/api'
 
@@ -20,8 +22,8 @@ const TopicCard: React.FC<TopicCardProps> = ({ topic, onUse, actionLabel = '生�
   return (
     <div
       style={{
-        background: 'var(--ac-card)',
-        border: '1px solid var(--ac-line)',
+        background: 'var(--ac-line-2)',
+        border: 'none',
         borderRadius: '16px',
         padding: '20px',
         boxShadow: 'var(--ac-shadow)',
@@ -55,8 +57,8 @@ const TopicCard: React.FC<TopicCardProps> = ({ topic, onUse, actionLabel = '生�
 
       {/* 为什么热 / 人群 */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px', color: 'var(--ac-muted)' }}>
-        {topic.why_hot && <div>🔥 {topic.why_hot}</div>}
-        {topic.target_audience && <div>🎯 {topic.target_audience}</div>}
+        {topic.why_hot && <div><span style={{ color: 'var(--ac-sub)', fontWeight: 500 }}>热度原因 · </span>{topic.why_hot}</div>}
+        {topic.target_audience && <div><span style={{ color: 'var(--ac-sub)', fontWeight: 500 }}>目标受众 · </span>{topic.target_audience}</div>}
       </div>
 
       {/* 关键词 */}
@@ -69,7 +71,7 @@ const TopicCard: React.FC<TopicCardProps> = ({ topic, onUse, actionLabel = '生�
                 fontSize: '11px',
                 color: 'var(--ac-sub)',
                 background: 'var(--ac-line-2)',
-                border: '1px solid var(--ac-line)',
+                border: 'none',
                 borderRadius: '999px',
                 padding: '2px 10px',
               }}
@@ -94,15 +96,12 @@ const TopicCard: React.FC<TopicCardProps> = ({ topic, onUse, actionLabel = '生�
       {/* 主操作 */}
       <div style={{ marginTop: 'auto', paddingTop: '4px' }}>
         <Button
-          type="text"
+          type="primary"
+          icon={<Icon icon={fileTextBold} className="size-4 text-white" />}
           onClick={() => onUse?.(topic)}
           style={{
             width: '100%',
             height: '36px',
-            borderRadius: '999px',
-            border: '1px solid var(--ac-line)',
-            background: 'var(--ac-card)',
-            color: 'var(--ac-ink)',
             fontSize: '13px',
             fontWeight: 500,
           }}

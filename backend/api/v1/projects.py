@@ -707,19 +707,43 @@ async def get_processing_status(
             latest_task = max(tasks, key=lambda t: t.created_at) if hasattr(tasks[0], 'created_at') else tasks[0]
         
         if not latest_task:
+            project_status = project.status.value if hasattr(project.status, "value") else str(project.status)
+            normalized_status = "error" if project_status == "failed" else project_status
             return {
-                "status": "pending",
+                "status": normalized_status,
                 "current_step": 0,
                 "total_steps": 6,
-                "step_name": "等待开始",
+                "step_name": "正在初始化" if normalized_status == "processing" else "等待开始",
                 "progress": 0,
                 "error_message": None
             }
         
         # 获取处理状态
-        status = processing_service.get_processing_status(project_id, str(latest_task.id))
-        
-        return status
+        raw_status = processing_service.get_processing_status(project_id, str(latest_task.id))
+
+        task_status = raw_status.get("task_status", "pending")
+        project_status = project.status.value if hasattr(project.status, "value") else str(project.status)
+        if task_status == "completed" or project_status == "completed":
+            normalized_status = "completed"
+        elif task_status == "failed" or project_status == "failed":
+            normalized_status = "error"
+        else:
+            normalized_status = "processing"
+
+        progress = float(raw_status.get("task_progress") or 0)
+        is_compose = bool((project.processing_config or {}).get("compose"))
+        total_steps = 5 if is_compose else 6
+        current_step = min(total_steps - 1, int(progress / 100 * total_steps))
+
+        return {
+            **raw_status,
+            "status": normalized_status,
+            "current_step": current_step,
+            "total_steps": total_steps,
+            "step_name": latest_task.current_step or ("生成视频" if is_compose else "处理视频"),
+            "progress": progress,
+            "error_message": raw_status.get("error_message"),
+        }
     except Exception as e:
         logger.exception("获取处理状态失败: %s", project_id)
         raise HTTPException(status_code=500, detail="获取处理状态失败，请稍后重试")

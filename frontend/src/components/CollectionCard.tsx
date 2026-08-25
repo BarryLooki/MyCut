@@ -1,6 +1,9 @@
 import React, { useMemo, useState } from 'react'
+import { Icon } from '@iconify/react'
+import downloadLinear from '@iconify-icons/solar/download-linear'
+import playCircleBold from '@iconify-icons/solar/play-circle-bold'
+import playCircleLinear from '@iconify-icons/solar/play-circle-linear'
 import { Card, Button, Tooltip } from 'antd'
-import { PlayCircleOutlined, DownloadOutlined } from '@ant-design/icons'
 import { Collection, Clip } from '../store/useProjectStore'
 import EditableCollectionTitle from './EditableCollectionTitle'
 import './CollectionCard.css'
@@ -108,7 +111,7 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
             }}
             className="video-overlay"
           >
-            <PlayCircleOutlined style={{ fontSize: '40px', color: 'white' }} />
+            <Icon icon={playCircleBold} className="size-10 text-white" />
           </div>
           
           {/* 右上角合集类型标签 */}
@@ -263,7 +266,7 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
           <Button 
             type="text" 
             size="small"
-            icon={<PlayCircleOutlined />}
+            icon={<Icon icon={playCircleLinear} className="size-4" />}
             onClick={() => onView(collection)}
             style={{
               color: 'var(--ac-ink)',
@@ -281,7 +284,7 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
             <Button 
               type="text" 
               size="small"
-              icon={<DownloadOutlined />}
+              icon={<Icon icon={downloadLinear} className="size-4" />}
               onClick={() => onGenerateVideo(collection.id)}
               style={{
                 color: 'var(--ac-sub)',

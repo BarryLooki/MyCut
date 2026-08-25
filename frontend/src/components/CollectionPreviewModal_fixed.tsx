@@ -263,7 +263,7 @@ const CollectionPreviewModal: React.FC<CollectionPreviewModalProps> = ({
       className="collection-preview-modal"
       closable={false}
       maskClosable={false}
-      destroyOnClose={false}
+      destroyOnHidden={false}
       getContainer={false}
     >
       <div className="collection-preview-container">
@@ -523,4 +523,4 @@ const CollectionPreviewModal: React.FC<CollectionPreviewModalProps> = ({
   )
 }
 
-export default CollectionPreviewModal 
+export default CollectionPreviewModal

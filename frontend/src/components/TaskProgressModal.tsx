@@ -170,7 +170,7 @@ const TaskProgressModal: React.FC<TaskProgressModalProps> = ({
       width={600}
       centered
       maskClosable={false}
-      destroyOnClose
+      destroyOnHidden
     >
       <div style={{ padding: '16px 0' }}>
         {!status ? (

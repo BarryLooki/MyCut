@@ -93,6 +93,14 @@ def compose_from_script(
     project = project_service.create_project(project_data, user_id=user_id)
     project_id = str(project.id)
 
+    # 成片任务会立即在桌面后台线程中执行。这里先把项目置为 processing，避免首页把
+    # 它当作“待处理的上传项目”再次调用普通切片流程（成片项目本身没有 input.mp4）。
+    project.status = ProjectStatus.PROCESSING
+    db.commit()
+
+    from ...services.simple_progress import emit_progress
+    emit_progress(project_id, "INGEST", "正在准备文案和成片环境", subpercent=10)
+
     # 派发渲染任务（桌面模式自动后台线程执行）
     from ...tasks.compose import render_script_video
     render_script_video.delay(

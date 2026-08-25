@@ -5,6 +5,8 @@ interface ImportMetaEnv {
   readonly VITE_PUBLIC_POSTHOG_KEY?: string
   /** PostHog 实例地址，US: https://us.i.posthog.com，EU: https://eu.i.posthog.com */
   readonly VITE_PUBLIC_POSTHOG_HOST?: string
+  /** 仅开发环境使用：未配置 Supabase 时从登录页开始预览。 */
+  readonly VITE_AUTH_PREVIEW?: 'true' | 'false'
 }
 
 interface ImportMeta {

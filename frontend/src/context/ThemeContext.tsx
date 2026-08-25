@@ -21,7 +21,10 @@ export const ThemeProvider: React.FC<React.PropsWithChildren> = ({ children }) =
   const [theme, setTheme] = useState<Theme>(getInitialTheme)
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme
+    const root = document.documentElement
+    root.dataset.theme = theme
+    root.classList.toggle('dark', theme === 'dark')
+    root.style.colorScheme = theme
     localStorage.setItem(THEME_STORAGE_KEY, theme)
   }, [theme])
 

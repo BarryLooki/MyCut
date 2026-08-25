@@ -4,10 +4,8 @@
  */
 
 import React, { useEffect, useState } from 'react'
-import { Progress, Typography } from 'antd'
-import { useSimpleProgressStore, getStageDisplayName, getStageColor, isCompleted, isFailed } from '../stores/useSimpleProgressStore'
-
-const { Text } = Typography
+import { Progress } from './ui/progress'
+import { useSimpleProgressStore, getStageDisplayName, isCompleted, isFailed } from '../stores/useSimpleProgressStore'
 
 interface UnifiedStatusBarProps {
   projectId: string
@@ -118,24 +116,20 @@ export const UnifiedStatusBar: React.FC<UnifiedStatusBarProps> = ({
     }
   }, [progress, onStatusChange])
 
-  // ===== Calm Premium 状态展示（见 DESIGN.md）=====
-  // 进行中：细进度线 + 标签 + 右侧 mono 百分比
   const ProgressRow = ({ label, percent }: { label: string; percent: number }) => (
-    <div style={{ width: '100%' }}>
-      <div style={{ height: 4, background: 'var(--ac-line)', borderRadius: 999, overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${Math.max(0, Math.min(100, percent))}%`, background: 'var(--ac-accent)', borderRadius: 999, transition: 'width .4s ease' }} />
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 9 }}>
-        <span style={{ color: 'var(--ac-sub)', fontSize: 12.5 }}>{label}</span>
-        <span className="ac-mono" style={{ color: 'var(--ac-accent)', fontSize: 12.5 }}>{Math.round(percent)}%</span>
+    <div className="w-full">
+      <Progress value={Math.max(0, Math.min(100, percent))} />
+      <div className="mt-2.5 flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="tabular-nums text-muted-foreground">{Math.round(percent)}%</span>
       </div>
     </div>
   )
-  // 终态：小圆点 + 标签
-  const StatusRow = ({ label, dot, color }: { label: string; dot: string; color: string }) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 7, height: 4 + 9 + 12.5 + 2, minHeight: 26 }}>
-      <span style={{ width: 6, height: 6, borderRadius: '50%', background: dot, flex: '0 0 auto' }} />
-      <span style={{ color, fontSize: 12.5 }}>{label}</span>
+
+  const StatusRow = ({ label, failed = false }: { label: string; failed?: boolean }) => (
+    <div className={`flex min-h-6 items-center gap-2 text-xs ${failed ? 'text-destructive' : 'text-muted-foreground'}`}>
+      <span className={`size-1.5 shrink-0 rounded-full ${failed ? 'bg-destructive' : 'bg-foreground'}`} />
+      <span>{label}</span>
     </div>
   )
 
@@ -145,15 +139,15 @@ export const UnifiedStatusBar: React.FC<UnifiedStatusBarProps> = ({
   if (status === 'processing') {
     if (!progress) return <ProgressRow label="初始化中" percent={0} />
     const { stage, percent, message } = progress
-    if (isFailed(message)) return <StatusRow label="处理失败" dot="var(--ac-error)" color="var(--ac-error)" />
+    if (isFailed(message)) return <StatusRow label="处理失败" failed />
     return <ProgressRow label={getStageDisplayName(stage)} percent={percent} />
   }
 
-  if (status === 'completed') return <StatusRow label="已完成" dot="var(--ac-ok)" color="var(--ac-sub)" />
-  if (status === 'failed') return <StatusRow label="处理失败" dot="var(--ac-error)" color="var(--ac-error)" />
+  if (status === 'completed') return <StatusRow label="已完成" />
+  if (status === 'failed') return <StatusRow label="处理失败" failed />
 
   // 等待
-  return <StatusRow label="等待中" dot="var(--ac-muted)" color="var(--ac-muted)" />
+  return <StatusRow label="等待中" />
 }
 
 // 简化的进度条组件 - 用于详细进度显示
@@ -175,22 +169,17 @@ export const SimpleProgressDisplay: React.FC<SimpleProgressDisplayProps> = ({
     return null
   }
 
-  const { stage, percent, message } = progress
-  const stageColor = getStageColor(stage)
+  const { percent, message } = progress
 
   return (
-    <div style={{ marginTop: '8px' }}>
-      <Progress
-        percent={percent}
-        strokeColor={stageColor}
-        showInfo={true}
-        size="small"
-        format={(percent) => `${percent}%`}
-      />
+    <div className="mt-2 space-y-2">
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span>处理进度</span>
+        <span className="tabular-nums">{percent}%</span>
+      </div>
+      <Progress value={percent} />
       {message && (
-        <Text type="secondary" style={{ fontSize: '11px', display: 'block', marginTop: '4px' }}>
-          {message}
-        </Text>
+        <p className="text-xs text-muted-foreground">{message}</p>
       )}
     </div>
   )

@@ -20,6 +20,7 @@ from backend.models.task import Task, TaskStatus, TaskType
 from backend.services import compose_service
 from backend.services.compose_service import ComposeCancelled
 from backend.services.script_repo import ScriptRepo
+from backend.services.simple_progress import emit_progress
 from backend.utils.tts import _probe_duration
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,36 @@ logger = logging.getLogger(__name__)
 # 同一项目同一时间只允许一次成片（防桌面模式并发重复派发撞库）
 _active_compose_projects: set = set()
 _active_compose_lock = threading.Lock()
+_last_simple_progress: Dict[str, tuple[int, str]] = {}
+_simple_progress_lock = threading.Lock()
+
+
+def _emit_compose_progress(project_id: str, percent: int, message: str) -> None:
+    """把自动成片的连续进度映射到首页共用的固定阶段进度。"""
+    value = max(0, min(100, int(percent)))
+    signature = (value, message)
+    with _simple_progress_lock:
+        if _last_simple_progress.get(project_id) == signature:
+            return
+        _last_simple_progress[project_id] = signature
+
+    ranges = (
+        ("INGEST", 0, 10),
+        ("SUBTITLE", 10, 25),
+        ("ANALYZE", 25, 45),
+        ("HIGHLIGHT", 45, 70),
+        ("EXPORT", 70, 100),
+    )
+
+    if value >= 100:
+        emit_progress(project_id, "DONE", message)
+        return
+
+    for stage, start, end in ranges:
+        if value < end:
+            subpercent = ((value - start) / max(1, end - start)) * 100
+            emit_progress(project_id, stage, message, subpercent=subpercent)
+            return
 
 
 @celery_app.task(bind=True, name='backend.tasks.compose.render_script_video')
@@ -79,6 +110,7 @@ def render_script_video(
                 task.progress = float(percent)
                 task.current_step = message
                 db.commit()
+                _emit_compose_progress(project_id, percent, message)
             except Exception:  # noqa: BLE001
                 db.rollback()
 
@@ -127,6 +159,7 @@ def render_script_video(
             project.completed_at = datetime.utcnow()
             project.updated_at = datetime.utcnow()
         db.commit()
+        _emit_compose_progress(project_id, 100, "成片已生成，可以预览和下载")
 
         logger.info(f"自动成片完成: {out_path}")
         return {"success": True, "project_id": project_id, "video_path": str(out_path)}
@@ -143,6 +176,7 @@ def render_script_video(
                 project.status = ProjectStatus.FAILED
                 project.updated_at = datetime.utcnow()
             db.commit()
+            _emit_compose_progress(project_id, int(task.progress or 0), "生成已取消")
         except Exception:  # noqa: BLE001
             db.rollback()
         return {"success": False, "project_id": project_id, "cancelled": True}
@@ -158,6 +192,7 @@ def render_script_video(
                 project.status = ProjectStatus.FAILED
                 project.updated_at = datetime.utcnow()
             db.commit()
+            _emit_compose_progress(project_id, int(task.progress or 0), f"生成失败：{e}")
         except Exception:  # noqa: BLE001
             db.rollback()
         return {"success": False, "project_id": project_id, "error": str(e)}
@@ -166,3 +201,5 @@ def render_script_video(
         db.close()
         with _active_compose_lock:
             _active_compose_projects.discard(project_id)
+        with _simple_progress_lock:
+            _last_simple_progress.pop(project_id, None)

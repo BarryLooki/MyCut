@@ -1,552 +1,330 @@
-import React, { useState, useEffect } from 'react'
-import { Button, message, Space, Typography, Input, Progress } from 'antd'
-import { InboxOutlined, VideoCameraOutlined, FileTextOutlined, SubnodeOutlined } from '@ant-design/icons'
+import React, { useEffect, useState } from 'react'
+import { Icon } from '@iconify/react'
+import closeCircleLinear from '@iconify-icons/solar/close-circle-linear'
+import restartLinear from '@iconify-icons/solar/restart-linear'
+import starsMinimalisticLinear from '@iconify-icons/solar/stars-minimalistic-linear'
+import subtitlesLinear from '@iconify-icons/solar/subtitles-linear'
+import uploadBold from '@iconify-icons/solar/upload-bold'
+import uploadLinear from '@iconify-icons/solar/upload-linear'
+import videoFrameBold from '@iconify-icons/solar/video-frame-bold'
 import { useDropzone } from 'react-dropzone'
+import { toast } from 'sonner'
+
+import { cn } from '../lib/utils'
 import { projectApi, VideoCategory } from '../services/api'
 import { useProjectStore } from '../store/useProjectStore'
 import { validateApiConfigBeforeProjectCreation } from '../utils/apiConfigCheck'
-
-const { Text } = Typography
+import { Button } from './ui/button'
+import { Input } from './ui/input'
+import { Label } from './ui/label'
+import { Progress } from './ui/progress'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './ui/select'
+import { Separator } from './ui/separator'
+import { Skeleton } from './ui/skeleton'
 
 interface FileUploadProps {
   onUploadSuccess?: (projectId: string) => void
-  /** 阶段3：关联的文案（JSON 字符串）。传入即以「选题驱动」模式上传，切片偏向匹配文案要点。 */
   attachedScript?: string
+  variant?: 'default' | 'figma-home'
 }
 
-const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess, attachedScript }) => {
+interface UploadError {
+  code?: string
+  message?: string
+  userMessage?: string
+  response?: {
+    status?: number
+    data?: { detail?: string }
+  }
+}
+
+const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess, attachedScript, variant = 'default' }) => {
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [projectName, setProjectName] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState<string>('')
+  const [selectedCategory, setSelectedCategory] = useState('')
   const [categories, setCategories] = useState<VideoCategory[]>([])
-  const [, setLoadingCategories] = useState(false)
-  const [files, setFiles] = useState<{
-    video?: File
-    srt?: File
-  }>({})
-  
+  const [loadingCategories, setLoadingCategories] = useState(false)
+  const [files, setFiles] = useState<{ video?: File; srt?: File }>({})
   const { addProject } = useProjectStore()
 
-  // 加载视频分类配置
   useEffect(() => {
     const loadCategories = async () => {
       setLoadingCategories(true)
       try {
         const response = await projectApi.getVideoCategories()
         setCategories(response.categories)
-        // 设置默认选中【默认】选项
-        if (response.default_category) {
-          setSelectedCategory(response.default_category)
-        } else if (response.categories.length > 0) {
-          setSelectedCategory(response.categories[0].value)
-        }
+        if (response.default_category) setSelectedCategory(response.default_category)
+        else if (response.categories.length > 0) setSelectedCategory(response.categories[0].value)
       } catch (error) {
         console.error('Failed to load video categories:', error)
-        message.error('加载视频分类失败')
+        toast.error('加载视频分类失败')
       } finally {
         setLoadingCategories(false)
       }
     }
 
-    loadCategories()
+    void loadCategories()
   }, [])
 
   const onDrop = (acceptedFiles: File[]) => {
-    const newFiles = { ...files }
-    
-    acceptedFiles.forEach(file => {
+    const nextFiles = { ...files }
+
+    acceptedFiles.forEach((file) => {
       const extension = file.name.split('.').pop()?.toLowerCase()
-      
       if (['mp4', 'avi', 'mov', 'mkv', 'webm'].includes(extension || '')) {
-        newFiles.video = file
-        // 自动设置项目名称为视频文件名（去掉扩展名）
-        // 每次选择新视频文件时都更新项目名称
+        nextFiles.video = file
         setProjectName(file.name.replace(/\.[^/.]+$/, ''))
       } else if (extension === 'srt') {
-        newFiles.srt = file
+        nextFiles.srt = file
       }
     })
-    
-    setFiles(newFiles)
+
+    setFiles(nextFiles)
   }
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     onDrop,
     accept: {
       'video/*': ['.mp4', '.avi', '.mov', '.mkv', '.webm'],
-      'application/x-subrip': ['.srt']
+      'application/x-subrip': ['.srt'],
     },
-    multiple: true
+    multiple: true,
+    disabled: uploading,
+    noClick: true,
+    noKeyboard: true,
   })
 
   const handleUpload = async () => {
     if (!files.video) {
-      message.error('请选择视频文件')
+      toast.error('请选择视频文件')
       return
     }
-
     if (!projectName.trim()) {
-      message.error('请输入项目名称')
+      toast.error('请输入项目名称')
       return
     }
 
-    // 检查API配置
     const hasValidApiConfig = await validateApiConfigBeforeProjectCreation()
-    if (!hasValidApiConfig) {
-      return
-    }
+    if (!hasValidApiConfig) return
 
     setUploading(true)
     setUploadProgress(0)
-    
+    let progressInterval: number | undefined
+
     try {
-      // 模拟上传进度，更真实的进度显示
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 85) {
-            clearInterval(progressInterval)
-            return prev
-          }
-          // 使用递减的增量，模拟真实上传进度
-          const increment = Math.max(1, Math.floor((90 - prev) / 10))
-          return prev + increment
+      progressInterval = window.setInterval(() => {
+        setUploadProgress((currentProgress) => {
+          if (currentProgress >= 85) return currentProgress
+          const increment = Math.max(1, Math.floor((90 - currentProgress) / 10))
+          return currentProgress + increment
         })
       }, 300)
-
-      console.log('开始上传文件:', {
-        video_file: files.video.name,
-        srt_file: files.srt?.name || '(将使用语音识别生成)',
-        project_name: projectName.trim(),
-        video_category: selectedCategory
-      })
 
       const newProject = await projectApi.uploadFiles({
         video_file: files.video,
         srt_file: files.srt,
         project_name: projectName.trim(),
         video_category: selectedCategory,
-        script_json: attachedScript
+        script_json: attachedScript,
       })
 
-      console.log('上传成功，项目信息:', newProject)
-      
-      clearInterval(progressInterval)
+      if (progressInterval) window.clearInterval(progressInterval)
       setUploadProgress(100)
-      
       addProject(newProject)
-      message.success('项目创建成功！正在后台处理中，请稍候...')
-      
-      // 重置状态
+      toast.success('项目创建成功，正在后台处理')
+
       setFiles({})
       setProjectName('')
       setUploadProgress(0)
-      setUploading(false)
-      // 重置为默认分类
-      if (categories.length > 0) {
-        setSelectedCategory(categories[0].value)
-      }
-      
-      if (onUploadSuccess) {
-        onUploadSuccess(newProject.id)
-      }
-      
-    } catch (error: any) {
+      if (categories.length > 0) setSelectedCategory(categories[0].value)
+      onUploadSuccess?.(newProject.id)
+    } catch (rawError) {
+      const error = rawError as UploadError
       console.error('上传失败，详细错误:', error)
-      
+
       let errorMessage = '上传失败，请重试'
-      let errorType = 'error'
-      
-      // 根据错误类型提供更友好的错误信息
+      let warning = false
+
       if (error.response?.status === 413) {
         errorMessage = '文件太大，请选择较小的视频文件'
-        errorType = 'warning'
+        warning = true
       } else if (error.response?.status === 415) {
-        errorMessage = '不支持的文件格式，请选择MP4、AVI、MOV、MKV或WEBM格式的视频'
-        errorType = 'warning'
+        errorMessage = '不支持该文件格式，请使用 MP4、AVI、MOV、MKV 或 WebM'
+        warning = true
       } else if (error.response?.status === 400) {
-        if (error.response?.data?.detail) {
-          errorMessage = error.response.data.detail
-        } else {
-          errorMessage = '文件格式或内容有问题，请检查后重试'
-        }
+        errorMessage = error.response.data?.detail || '文件格式或内容有问题，请检查后重试'
       } else if (error.response?.status === 500) {
         errorMessage = '服务器处理文件时出错，请稍后重试'
       } else if (error.code === 'ECONNABORTED') {
         errorMessage = '上传超时，请检查网络连接后重试'
-      } else if (error.response?.data?.detail) {
-        errorMessage = error.response.data.detail
-      } else if (error.userMessage) {
-        errorMessage = error.userMessage
-      } else if (error.message) {
-        errorMessage = error.message
-      }
-      
-      // 显示错误信息
-      if (errorType === 'warning') {
-        message.warning(errorMessage)
       } else {
-        message.error(errorMessage)
+        errorMessage = error.response?.data?.detail || error.userMessage || error.message || errorMessage
       }
-      
-      // 如果是网络错误，提供重试建议
-      if (error.code === 'ECONNABORTED' || error.response?.status >= 500) {
-        message.info('如果问题持续存在，请检查网络连接或联系技术支持', 5)
+
+      if (warning) toast.warning(errorMessage)
+      else toast.error(errorMessage)
+
+      if (error.code === 'ECONNABORTED' || (error.response?.status || 0) >= 500) {
+        toast.info('如果问题持续存在，请检查网络连接或联系技术支持')
       }
     } finally {
+      if (progressInterval) window.clearInterval(progressInterval)
       setUploading(false)
     }
   }
 
   const removeFile = (type: 'video' | 'srt') => {
-    setFiles(prev => {
-      const newFiles = { ...prev }
-      delete newFiles[type]
-      return newFiles
+    setFiles((currentFiles) => {
+      const nextFiles = { ...currentFiles }
+      delete nextFiles[type]
+      return nextFiles
     })
+    if (type === 'video') setProjectName('')
+  }
+
+  if (!files.video) {
+    if (variant === 'figma-home') {
+      return (
+        <div
+          {...getRootProps()}
+          className={cn(
+            'h-[183px] w-full overflow-hidden rounded-[24px] border border-black/[0.08] bg-background p-[7px] transition-colors dark:border-white/10',
+            isDragActive && 'border-primary/55 bg-[var(--brand-soft)]',
+            uploading && 'pointer-events-none opacity-60',
+          )}
+        >
+          <input {...getInputProps()} />
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={open}
+            disabled={uploading}
+            className="flex h-[167px] w-full flex-col gap-0 rounded-[16px] border border-dashed border-black/[0.12] bg-[#fcfcfc] px-6 py-0 hover:bg-muted/45 dark:border-white/12 dark:bg-card dark:hover:bg-muted/55"
+          >
+            <span className="brand-gradient flex size-11 items-center justify-center rounded-full text-white shadow-[0_8px_22px_rgb(255_107_166/0.2)]">
+              <Icon icon={uploadBold} className="size-5 text-white" />
+            </span>
+            <span className="mt-4 text-[19px] font-semibold leading-none text-foreground">
+              {isDragActive ? '松开以上传素材' : '上传本地视频，AI 自动剪辑'}
+            </span>
+            <span className="mt-[9px] whitespace-normal text-center text-sm font-normal leading-5 text-foreground/40">
+              支持 MP4、MOV、AVI、MKV、WebM，可导入 SRT 字幕或交由 AI 自动生成
+            </span>
+          </Button>
+        </div>
+      )
+    }
+
+    return (
+      <div
+        {...getRootProps()}
+        className={cn(
+          'flex min-h-[17rem] w-full flex-col items-center justify-center rounded-[16px] bg-muted/55 px-6 py-9 text-center transition-colors',
+          isDragActive && 'bg-muted/85',
+          uploading && 'pointer-events-none opacity-60',
+        )}
+      >
+        <input {...getInputProps()} />
+        <Icon icon={uploadLinear} className="size-7 text-muted-foreground" />
+        <h3 className="mt-4 text-base font-semibold tracking-[-0.015em]">
+          {isDragActive ? '松开以上传素材' : '拖入视频素材'}
+        </h3>
+        <p className="mt-1.5 max-w-md text-sm leading-6 text-muted-foreground">
+          支持 MP4、MOV、AVI、MKV、WebM，可同时导入 SRT 字幕。
+        </p>
+        <Button type="button" className="mt-5" onClick={open} disabled={uploading}>
+          <Icon icon={uploadBold} className="size-4 text-white" />
+          选择视频
+        </Button>
+        <span className="mt-3 text-xs text-muted-foreground">单个文件建议不超过 2 GB</span>
+      </div>
+    )
   }
 
   return (
-    <div style={{
-      borderRadius: '16px',
-      padding: '0',
-      transition: 'all 0.3s ease',
-      position: 'relative',
-      overflow: 'hidden',
-      width: '100%',
-      margin: '0 auto'
-    }}>
-      {/* 背景装饰 */}
-      <div style={{
-        position: 'absolute',
-        top: '-50%',
-        right: '-50%',
-        width: '200%',
-        height: '200%',
-        background: 'radial-gradient(circle, rgba(232, 113, 10, 0.08) 0%, transparent 70%)',
-        pointerEvents: 'none'
-      }} />
-      
+    <div {...getRootProps()} className={cn('space-y-5', isDragActive && 'rounded-[16px] bg-muted/35 p-2')}>
+      <input {...getInputProps()} />
 
-      
-      <div 
-        {...getRootProps()} 
-        className={`upload-area ${isDragActive ? 'dragover' : ''}`}
-        style={{
-          padding: '24px 16px',
-          textAlign: 'center',
-          marginBottom: '16px',
-          background: isDragActive ? 'rgba(232, 113, 10, 0.15)' : 'var(--ac-line-2)',
-          border: `2px dashed ${isDragActive ? '#E8710A' : 'rgba(232, 113, 10, 0.3)'}`,
-          borderRadius: '16px',
-          cursor: 'pointer',
-          transition: 'all 0.3s ease',
-          position: 'relative',
-          backdropFilter: 'blur(10px)'
-        }}
-      >
-        <input {...getInputProps()} />
-        <div style={{
-          width: '48px',
-          height: '48px',
-          margin: '0 auto 12px',
-          background: isDragActive ? 'rgba(232, 113, 10, 0.3)' : 'rgba(232, 113, 10, 0.1)',
-          borderRadius: '50%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          transition: 'all 0.3s ease',
-          border: '1px solid rgba(232, 113, 10, 0.2)'
-        }}>
-          <InboxOutlined style={{ 
-            fontSize: '20px', 
-            color: isDragActive ? '#E8710A' : '#E8710A'
-          }} />
+      <div className="overflow-hidden rounded-[16px] bg-muted/55">
+        <div className="flex items-center gap-3 p-4">
+          <Icon icon={videoFrameBold} className="size-5 shrink-0 text-muted-foreground" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">{files.video.name}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{(files.video.size / 1024 / 1024).toFixed(2)} MB · 视频素材</p>
+          </div>
+          <Button type="button" variant="secondary" size="sm" onClick={open} disabled={uploading}>更换</Button>
+          <Button type="button" variant="ghost" size="icon-sm" onClick={() => removeFile('video')} disabled={uploading} aria-label="移除视频">
+            <Icon icon={closeCircleLinear} />
+          </Button>
         </div>
-        <div>
-          <Text strong style={{ 
-            color: '#ffffff',
-            fontSize: '16px',
-            display: 'block',
-            marginBottom: '8px',
-            fontWeight: 600
-          }}>
-            {isDragActive ? '松开鼠标导入文件' : '点击或拖拽文件到此区域'}
-          </Text>
-          <Text style={{ color: 'var(--ac-sub)', fontSize: '14px', lineHeight: '1.5' }}>
-            支持 MP4、AVI、MOV、MKV、WebM 格式，<Text style={{ color: '#52c41a', fontWeight: 600 }}>可选择导入字幕文件(.srt)或使用AI自动生成</Text>
-          </Text>
+        <Separator />
+        <div className="flex items-center gap-3 p-4">
+          <Icon icon={files.srt ? subtitlesLinear : starsMinimalisticLinear} className="size-5 shrink-0 text-muted-foreground" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">{files.srt ? files.srt.name : '自动生成字幕'}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{files.srt ? 'SRT 字幕文件已准备' : '未添加字幕时将使用 AI 语音识别'}</p>
+          </div>
+          <Button type="button" variant="ghost" size="sm" onClick={open} disabled={uploading}>{files.srt ? '更换' : '添加字幕'}</Button>
+          {files.srt && (
+            <Button type="button" variant="ghost" size="icon-sm" onClick={() => removeFile('srt')} disabled={uploading} aria-label="移除字幕">
+              <Icon icon={closeCircleLinear} />
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* 项目名称输入 - 只有在选择文件后才显示 */}
-      {files.video && (
-        <div style={{ marginBottom: '16px' }}>
-          <Text strong style={{ color: '#ffffff', fontSize: '14px', marginBottom: '8px', display: 'block' }}>
-            项目名称
-          </Text>
-          <Input
-            value={projectName}
-            onChange={(e) => setProjectName(e.target.value)}
-            placeholder="请输入项目名称，用于标识您的视频项目"
-            style={{ 
-              height: '40px',
-              borderRadius: '12px',
-              fontSize: '14px',
-              background: 'var(--ac-line-2)',
-              border: '1px solid rgba(232, 113, 10, 0.3)',
-              color: '#ffffff'
-            }}
-          />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="project-name">项目名称</Label>
+          <Input id="project-name" value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="输入项目名称" disabled={uploading} />
         </div>
-      )}
-
-      {/* 视频分类选择 - 只有在选择文件后才显示 */}
-      {files.video && (
-        <div style={{ marginBottom: '16px' }}>
-          <Text strong style={{ color: '#ffffff', fontSize: '14px', marginBottom: '8px', display: 'block' }}>
-            视频分类
-          </Text>
-          <div style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: '8px'
-          }}>
-            {categories.map(category => {
-              const isSelected = selectedCategory === category.value
-              return (
-                <div
-                  key={category.value}
-                  onClick={() => setSelectedCategory(category.value)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '8px 12px',
-                    borderRadius: '6px',
-                    border: isSelected 
-                      ? `2px solid ${category.color}` 
-                      : '2px solid var(--ac-line)',
-                    background: isSelected 
-                      ? `${category.color}25` 
-                      : 'var(--ac-line)',
-                    color: isSelected ? '#ffffff' : 'rgba(255, 255, 255, 0.8)',
-                    boxShadow: isSelected 
-                      ? `0 0 12px ${category.color}40` 
-                      : 'none',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    fontSize: '13px',
-                    fontWeight: isSelected ? 600 : 400,
-                    userSelect: 'none'
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isSelected) {
-                      e.currentTarget.style.background = 'var(--ac-line)'
-                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)'
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isSelected) {
-                      e.currentTarget.style.background = 'var(--ac-line)'
-                      e.currentTarget.style.borderColor = 'var(--ac-line)'
-                    }
-                  }}
-                >
-                  <span style={{ fontSize: '14px' }}>{category.icon}</span>
-                  <span>{category.name}</span>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* 文件列表 */}
-      {Object.keys(files).length > 0 && (
-        <div style={{ marginBottom: '16px' }}>
-          <Text strong style={{ color: '#ffffff', fontSize: '14px', marginBottom: '12px', display: 'block' }}>
-            已选择文件
-          </Text>
-          <Space direction="vertical" style={{ width: '100%' }} size="small">
-            {files.video && (
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'space-between',
-                padding: '16px',
-                background: 'var(--ac-line-2)',
-                borderRadius: '12px',
-                border: '1px solid rgba(232, 113, 10, 0.2)',
-                backdropFilter: 'blur(10px)'
-              }}>
-                <Space size="middle">
-                  <div style={{
-                    width: '36px',
-                    height: '36px',
-                    background: 'linear-gradient(135deg, #E8710A 0%, #FF8C42 100%)',
-                    borderRadius: '8px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: '0 4px 12px rgba(232, 113, 10, 0.3)'
-                  }}>
-                    <VideoCameraOutlined style={{ color: '#ffffff', fontSize: '16px' }} />
-                  </div>
-                  <div>
-                    <Text style={{ color: '#ffffff', fontWeight: 600, display: 'block', fontSize: '14px' }}>
-                      {files.video.name}
-                    </Text>
-                    <Text style={{ color: 'var(--ac-sub)', fontSize: '13px' }}>
-                      {(files.video.size / 1024 / 1024).toFixed(2)} MB
-                    </Text>
-                  </div>
-                </Space>
-                <Button 
-                  size="small" 
-                  type="text" 
-                  onClick={() => removeFile('video')}
-                  style={{ 
-                    color: '#ff6b6b',
-                    borderRadius: '8px',
-                    padding: '4px 12px',
-                    fontSize: '12px'
-                  }}
-                >
-                  移除
-                </Button>
-              </div>
-            )}
-            {files.srt && (
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'space-between',
-                padding: '16px',
-                background: 'var(--ac-line-2)',
-                borderRadius: '12px',
-                border: '1px solid rgba(82, 196, 26, 0.3)',
-                backdropFilter: 'blur(10px)'
-              }}>
-                <Space size="middle">
-                  <div style={{
-                    width: '36px',
-                    height: '36px',
-                    background: 'linear-gradient(135deg, #52c41a 0%, #73d13d 100%)',
-                    borderRadius: '8px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: '0 4px 12px rgba(82, 196, 26, 0.3)'
-                  }}>
-                    <FileTextOutlined style={{ color: '#ffffff', fontSize: '16px' }} />
-                  </div>
-                  <div>
-                    <Text style={{ color: '#ffffff', fontWeight: 600, display: 'block', fontSize: '14px' }}>
-                      {files.srt.name}
-                    </Text>
-                    <Text style={{ color: 'var(--ac-sub)', fontSize: '13px' }}>
-                      字幕文件
-                    </Text>
-                  </div>
-                </Space>
-                <Button 
-                  size="small" 
-                  type="text" 
-                  onClick={() => removeFile('srt')}
-                  style={{ 
-                    color: '#ff6b6b',
-                    borderRadius: '8px',
-                    padding: '4px 12px',
-                    fontSize: '12px'
-                  }}
-                >
-                  移除
-                </Button>
-              </div>
-            )}
-          </Space>
-          
-          {/* AI字幕生成提示 */}
-          {files.video && !files.srt && (
-            <div style={{
-              marginTop: '12px',
-              padding: '12px 16px',
-              background: 'rgba(82, 196, 26, 0.1)',
-              border: '1px solid rgba(82, 196, 26, 0.3)',
-              borderRadius: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}>
-              <SubnodeOutlined style={{ color: '#52c41a', fontSize: '16px' }} />
-              <Text style={{ color: '#52c41a', fontSize: '14px', fontWeight: 500 }}>
-                将使用AI语音识别自动生成字幕文件
-              </Text>
-            </div>
+        <div className="space-y-2">
+          <Label htmlFor="video-category">视频分类</Label>
+          {loadingCategories ? (
+            <Skeleton className="h-10 w-full rounded-xl" />
+          ) : (
+            <Select value={selectedCategory} onValueChange={setSelectedCategory} disabled={uploading}>
+              <SelectTrigger id="video-category" className="w-full" aria-label="选择视频分类">
+                <SelectValue placeholder="选择视频分类" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((category) => (
+                  <SelectItem key={category.value} value={category.value}>{category.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
         </div>
-      )}
+      </div>
 
-      {/* 导入进度 */}
       {uploading && (
-        <div style={{ 
-          marginBottom: '16px',
-          padding: '20px',
-          background: 'var(--ac-line-2)',
-          borderRadius: '16px',
-          border: '1px solid rgba(232, 113, 10, 0.3)',
-          backdropFilter: 'blur(10px)'
-        }}>
-          <div style={{ marginBottom: '12px' }}>
-            <Text style={{ color: '#ffffff', fontWeight: 600, fontSize: '14px' }}>导入进度</Text>
-            <Text style={{ color: '#E8710A', float: 'right', fontWeight: 600, fontSize: '14px' }}>
-              {uploadProgress}%
-            </Text>
+        <div className="space-y-2.5 rounded-[16px] bg-muted/60 p-4" role="status">
+          <div className="flex items-center justify-between text-sm">
+            <span className="flex items-center gap-2 font-medium">
+              <Icon icon={restartLinear} className="size-4 animate-spin" />
+              正在上传并创建项目
+            </span>
+            <span className="tabular-nums text-muted-foreground">{uploadProgress}%</span>
           </div>
-          <Progress 
-            percent={uploadProgress} 
-            status="active"
-            strokeColor={{
-              '0%': '#E8710A',
-              '100%': '#FF8C42',
-            }}
-            trailColor="var(--ac-line)"
-            strokeWidth={6}
-            showInfo={false}
-            style={{ marginBottom: '8px' }}
-          />
-          <Text style={{ color: 'var(--ac-sub)', fontSize: '13px', marginTop: '8px', display: 'block', textAlign: 'center' }}>
-            正在导入文件，请稍候...
-          </Text>
+          <Progress value={uploadProgress} />
         </div>
       )}
 
-      {/* 上传按钮 - 只有在选择文件后才显示 */}
-      {files.video && (
-        <div style={{ textAlign: 'center', marginTop: '8px' }}>
-          <Button 
-            type="primary" 
-            size="large"
-            loading={uploading}
-            disabled={!files.video || !projectName.trim()}
-            onClick={handleUpload}
-            style={{
-              height: '48px',
-              padding: '0 32px',
-              borderRadius: '24px',
-              background: uploading ? '#666666' : 'linear-gradient(135deg, #E8710A 0%, #FF8C42 100%)',
-              border: 'none',
-              fontSize: '16px',
-              fontWeight: 600,
-              boxShadow: uploading ? 'none' : '0 4px 20px rgba(232, 113, 10, 0.4)',
-              transition: 'all 0.3s ease'
-            }}
-          >
-            {uploading ? '导入中...' : '开始导入并处理'}
-          </Button>
-        </div>
-      )}
+      <Separator />
+      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs text-muted-foreground">创建后将在后台自动分析、生成字幕并切片。</p>
+        <Button type="button" onClick={() => void handleUpload()} disabled={uploading || !projectName.trim()} className="w-full sm:w-auto">
+          <Icon icon={uploadBold} className={cn('size-4 text-white', uploading && 'animate-pulse')} />
+          {uploading ? '正在创建项目' : '开始导入并处理'}
+        </Button>
+      </div>
     </div>
   )
 }

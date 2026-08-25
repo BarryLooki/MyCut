@@ -1,74 +1,109 @@
-import { useEffect } from 'react'
-import { Routes, Route, useLocation } from 'react-router-dom'
-import { Layout, Spin } from 'antd'
-import HomePage from './pages/HomePage'
-import ProjectDetailPage from './pages/ProjectDetailPage'
-import SettingsPage from './pages/SettingsPage'
-import HotspotPage from './pages/HotspotPage'
-import ScriptEditorPage from './pages/ScriptEditorPage'
-import ScriptLibraryPage from './pages/ScriptLibraryPage'
-import LoginPage from './pages/LoginPage'
-import MembershipPage from './pages/MembershipPage'
-import AdminPage from './pages/AdminPage'
-import Header from './components/Header'
-import { trackPageview } from './analytics/posthog'
-import { useAuth } from './context/AuthContext'
+import { useEffect, useLayoutEffect, useRef } from 'react'
+import { Icon } from '@iconify/react'
+import restartCircleLinear from '@iconify-icons/solar/restart-circle-linear'
+import { Route, Routes, useLocation } from 'react-router-dom'
 
-const { Content } = Layout
+import { trackPageview } from '@/analytics/posthog'
+import Header from '@/components/Header'
+import { useAuth } from '@/context/AuthContext'
+import AdminPage from '@/pages/AdminPage'
+import HomePage from '@/pages/HomePage'
+import HotspotPage from '@/pages/HotspotPage'
+import LoginPage from '@/pages/LoginPage'
+import MembershipPage from '@/pages/MembershipPage'
+import ProcessingPage from '@/pages/ProcessingPage'
+import ProjectDetailPage from '@/pages/ProjectDetailPage'
+import ProjectsPage from '@/pages/ProjectsPage'
+import ScriptEditorPage from '@/pages/ScriptEditorPage'
+import ScriptLibraryPage from '@/pages/ScriptLibraryPage'
+import SettingsPage from '@/pages/SettingsPage'
 
-// HashRouter 下手动上报 pageview（init 时已关闭自动 pageview）
+const LOCAL_APP_PREVIEW_KEY = 'mycut-local-app-preview'
+
 function usePageviewTracking() {
   const location = useLocation()
+
   useEffect(() => {
     trackPageview(location.pathname + location.search)
   }, [location.pathname, location.search])
 }
 
-function App() {
-  console.log('🎬 App组件已加载');
-  usePageviewTracking()
-  const { authEnabled, loading, user } = useAuth()
+function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/" element={<HomePage />} />
+      <Route path="/hotspots" element={<HotspotPage />} />
+      <Route path="/projects" element={<ProjectsPage />} />
+      <Route path="/scripts" element={<ScriptLibraryPage />} />
+      <Route path="/script" element={<ScriptEditorPage />} />
+      <Route path="/processing/:id" element={<ProcessingPage />} />
+      <Route path="/project/:id" element={<ProjectDetailPage />} />
+      <Route path="/membership" element={<MembershipPage />} />
+      <Route path="/admin" element={<AdminPage />} />
+      <Route path="/settings" element={<SettingsPage />} />
+    </Routes>
+  )
+}
 
-  // 认证启用时，会话还在恢复中 → 先给一个安静的加载态，避免闪一下登录页
+function App() {
+  usePageviewTracking()
+  const location = useLocation()
+  const pageViewportRef = useRef<HTMLDivElement>(null)
+  const { authEnabled, loading, user } = useAuth()
+  const previewMode = new URLSearchParams(location.search).get('preview')
+  const hasLocalAppPreview =
+    import.meta.env.DEV &&
+    sessionStorage.getItem(LOCAL_APP_PREVIEW_KEY) === 'true'
+
+  useEffect(() => {
+    if (!import.meta.env.DEV || authEnabled) return
+
+    if (previewMode === 'home') {
+      sessionStorage.setItem(LOCAL_APP_PREVIEW_KEY, 'true')
+    } else if (previewMode === 'login') {
+      sessionStorage.removeItem(LOCAL_APP_PREVIEW_KEY)
+    }
+  }, [authEnabled, previewMode])
+
+  useLayoutEffect(() => {
+    const viewport = pageViewportRef.current
+    if (!viewport) return
+    viewport.scrollTop = 0
+    viewport.scrollLeft = 0
+  }, [location.pathname])
+
+  const showLocalAppPreview =
+    import.meta.env.DEV &&
+    !authEnabled &&
+    previewMode !== 'login' &&
+    (previewMode === 'home' || hasLocalAppPreview)
+  const showLocalAuthPreview =
+    import.meta.env.DEV &&
+    !authEnabled &&
+    import.meta.env.VITE_AUTH_PREVIEW === 'true' &&
+    !showLocalAppPreview
+
   if (authEnabled && loading) {
     return (
-      <div
-        style={{
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'var(--ac-bg)',
-        }}
-      >
-        <Spin />
+      <div className="flex min-h-screen items-center justify-center bg-[var(--workspace-background)]">
+        <span className="brand-gradient flex size-11 items-center justify-center rounded-2xl text-white shadow-[var(--brand-card-shadow)]">
+          <Icon icon={restartCircleLinear} className="size-5 motion-safe:animate-spin" />
+        </span>
       </div>
     )
   }
 
-  // 认证启用且未登录 → 登录门（挡住整个应用，包括 Header）
-  if (authEnabled && !user) {
+  if ((authEnabled && !user) || showLocalAuthPreview) {
     return <LoginPage />
   }
 
   return (
-    <Layout>
+    <div className="mycut-app-shell flex h-svh min-w-0 flex-col overflow-hidden bg-[var(--workspace-background)]">
       <Header />
-      <Content>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          {/* 查热点全页（首页入口卡片进入）：查热点→大纲→文案→保存 */}
-          <Route path="/hotspots" element={<HotspotPage />} />
-          <Route path="/scripts" element={<ScriptLibraryPage />} />
-          <Route path="/script" element={<ScriptEditorPage />} />
-          <Route path="/project/:id" element={<ProjectDetailPage />} />
-          <Route path="/membership" element={<MembershipPage />} />
-          {/* 管理者后台：入口按 isAdmin 显示，页面内也会二次拦截非管理员 */}
-          <Route path="/admin" element={<AdminPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-        </Routes>
-      </Content>
-    </Layout>
+      <div ref={pageViewportRef} className="mycut-page-viewport min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-scroll">
+        <AppRoutes />
+      </div>
+    </div>
   )
 }
 

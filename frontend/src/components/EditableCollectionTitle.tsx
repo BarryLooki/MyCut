@@ -125,7 +125,7 @@ const EditableCollectionTitle: React.FC<EditableCollectionTitleProps> = ({
         onCancel={handleCancel}
         footer={null}
         width={600}
-        destroyOnClose
+        destroyOnHidden
         maskClosable={false}
       >
         <div style={{ marginBottom: '16px' }}>

@@ -13,8 +13,14 @@ import App from './App.tsx'
 import ErrorBoundary from './components/ErrorBoundary'
 import { ThemeProvider, useTheme } from './context/ThemeContext'
 import { AuthProvider } from './context/AuthContext'
+import { Toaster } from './components/ui/sonner'
+import { TooltipProvider } from './components/ui/tooltip'
 import { initAnalytics } from './analytics/posthog'
 import { trackLaunch } from './analytics/lifecycle'
+import 'misans/lib/Normal/MiSans-Regular.min.css'
+import 'misans/lib/Normal/MiSans-Medium.min.css'
+import 'misans/lib/Normal/MiSans-Semibold.min.css'
+import 'misans/lib/Normal/MiSans-Bold.min.css'
 import './index.css'
 
 // 初始化产品分析 / 埋点（无 key 时自动 no-op，不发任何网络请求）
@@ -51,19 +57,19 @@ function ThemedApp() {
       algorithm: isDark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
       token: {
         // Calm Premium tokens — see DESIGN.md
-        colorPrimary: isDark ? '#5A8BFF' : '#2D6BFF',
+        colorPrimary: isDark ? '#FF87AC' : '#E84D8D',
         colorText: isDark ? '#ECEAE6' : '#1A1A19',
         colorTextSecondary: isDark ? '#A6A29B' : '#6E6B66',
-        colorBgBase: isDark ? '#19181A' : '#F6F5F3',
+        colorBgBase: isDark ? '#151416' : '#FAF9F8',
         colorBgContainer: isDark ? '#211F22' : '#FFFFFF',
         colorBorder: isDark ? '#2C2A2D' : '#EBE9E4',
         colorBorderSecondary: isDark ? '#232124' : '#F0EEEA',
         borderRadius: 10,
-        fontFamily: '"Geist","PingFang SC","Noto Sans SC",system-ui,-apple-system,sans-serif',
+        fontFamily: '"MiSans","Mi Sans","PingFang SC","Microsoft YaHei",sans-serif',
         controlHeight: 38,
       },
       components: {
-        Button: { borderRadius: 999, controlHeight: 40, fontWeight: 500 },
+        Button: { borderRadius: 999, controlHeight: 40, fontWeight: 380 },
         Select: { borderRadius: 10 },
         Card: { borderRadiusLG: 16 },
       },
@@ -72,7 +78,10 @@ function ThemedApp() {
     <React.StrictMode>
       <AuthProvider>
         <HashRouter>
-          <Root />
+          <TooltipProvider>
+            <Root />
+            <Toaster />
+          </TooltipProvider>
         </HashRouter>
       </AuthProvider>
     </React.StrictMode>
