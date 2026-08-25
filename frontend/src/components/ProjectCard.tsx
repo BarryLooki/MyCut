@@ -77,7 +77,8 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   const [videoThumbnail, setVideoThumbnail] = useState<string | null>(null)
   const [thumbnailLoading, setThumbnailLoading] = useState(false)
   const [isRetrying, setIsRetrying] = useState(false)
-  const thumbnailCacheKey = `thumbnail_${project.id}`
+  const isComposedVideo = Boolean(project.settings?.compose || project.video_path?.includes('/output/compose.mp4'))
+  const thumbnailCacheKey = `thumbnail_v2_${project.id}`
 
   useEffect(() => {
     let cancelled = false
@@ -125,7 +126,10 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
 
               video.onloadedmetadata = () => {
                 window.clearTimeout(timeoutId)
-                video.currentTime = Math.min(5, video.duration / 4)
+                // 自动成片的视频在正文阶段会带字幕渐变蒙版，封面改取干净的片头帧。
+                video.currentTime = isComposedVideo
+                  ? Math.min(0.2, Math.max(video.duration - 0.05, 0))
+                  : Math.min(5, video.duration / 4)
               }
 
               video.onseeked = () => {
@@ -191,7 +195,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
     return () => {
       cancelled = true
     }
-  }, [project.id, project.thumbnail, project.video_path, thumbnailCacheKey])
+  }, [isComposedVideo, project.id, project.thumbnail, project.video_path, thumbnailCacheKey])
 
   const downloadProgress = project.processing_config?.download_progress || 0
   const isDownloading = project.status === 'pending' && downloadProgress > 0 && downloadProgress < 100
@@ -263,6 +267,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
 
   const category = categoryMap[project.video_category || 'default'] || categoryMap.default
   const canRetry = normalizedStatus === 'failed' || normalizedStatus === 'processing' || normalizedStatus === 'importing'
+  const displayName = project.name.replace(/^成片(?:\s*[：:]\s*)?/, '').trim() || project.name
 
   if (variant === 'compact') {
     const displayThumbnail = videoThumbnail || fallbackThumbnail
@@ -282,7 +287,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
           type="button"
           onClick={handleOpenProject}
           className="relative block h-[204px] w-full overflow-hidden bg-muted text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-          aria-label={`打开项目 ${project.name}`}
+          aria-label={`打开项目 ${displayName}`}
         >
           {displayThumbnail ? (
             <img src={displayThumbnail} alt="" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.015]" />
@@ -302,7 +307,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
 
         <div className="p-4">
           <button type="button" onClick={handleOpenProject} className="block w-full text-left outline-none focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-ring">
-            <h3 className="line-clamp-1 text-[19px] font-semibold leading-none text-[#333] dark:text-foreground" title={project.name}>{project.name}</h3>
+            <h3 className="line-clamp-1 text-[19px] font-semibold leading-none text-[#333] dark:text-foreground" title={displayName}>{displayName}</h3>
             <p className="mt-2 text-sm leading-none text-[#333]/72 dark:text-muted-foreground">
               {dayjs(project.created_at).tz('Asia/Shanghai').fromNow()}
             </p>
@@ -365,7 +370,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
                 </Tooltip>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>删除“{project.name}”？</AlertDialogTitle>
+                    <AlertDialogTitle>删除“{displayName}”？</AlertDialogTitle>
                     <AlertDialogDescription>项目及相关处理结果将被永久删除，此操作无法撤销。</AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -389,7 +394,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
         type="button"
         onClick={handleOpenProject}
         className="relative block aspect-video w-full overflow-hidden bg-muted/70 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-        aria-label={`打开项目 ${project.name}`}
+        aria-label={`打开项目 ${displayName}`}
       >
         {videoThumbnail ? (
           <img
@@ -421,6 +426,12 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
           </Badge>
         )}
 
+        {normalizedStatus === 'completed' && (
+          <Badge className="absolute right-3 top-3 rounded-full border-0 bg-background/92 px-3 py-1 text-[11px] font-medium text-foreground shadow-sm backdrop-blur-sm hover:bg-background/92">
+            已完成
+          </Badge>
+        )}
+
         {videoThumbnail && (
           <span className="absolute left-1/2 top-1/2 flex size-11 -translate-x-1/2 -translate-y-1/2 scale-95 items-center justify-center rounded-full bg-black/70 text-white opacity-0 shadow-lg backdrop-blur-md transition-[opacity,transform] duration-200 group-hover:scale-100 group-hover:opacity-100">
             <Icon icon={playCircleBold} className="size-6 text-white" />
@@ -435,26 +446,28 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
             onClick={handleOpenProject}
             className="min-w-0 text-left outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <h3 className="line-clamp-1 text-[15px] font-semibold" title={project.name}>{project.name}</h3>
+            <h3 className="line-clamp-1 text-[15px] font-semibold" title={displayName}>{displayName}</h3>
             <p className="mt-1 text-xs text-muted-foreground">
               {dayjs(project.created_at).tz('Asia/Shanghai').fromNow()}
             </p>
           </button>
         </div>
 
-        <div className="mt-3">
-          <UnifiedStatusBar
-            projectId={project.id}
-            status={normalizedStatus}
-            downloadProgress={progressPercent}
-            onStatusChange={(newStatus) => {
-              console.log(`项目 ${project.id} 状态变化: ${normalizedStatus} -> ${newStatus}`)
-            }}
-            onDownloadProgressUpdate={(progress) => {
-              console.log(`项目 ${project.id} 下载进度更新: ${progress}%`)
-            }}
-          />
-        </div>
+        {normalizedStatus !== 'completed' && (
+          <div className="mt-3">
+            <UnifiedStatusBar
+              projectId={project.id}
+              status={normalizedStatus}
+              downloadProgress={progressPercent}
+              onStatusChange={(newStatus) => {
+                console.log(`项目 ${project.id} 状态变化: ${normalizedStatus} -> ${newStatus}`)
+              }}
+              onDownloadProgressUpdate={(progress) => {
+                console.log(`项目 ${project.id} 下载进度更新: ${progress}%`)
+              }}
+            />
+          </div>
+        )}
 
         {normalizedStatus === 'completed' && (
           <div className="mt-3 flex items-center gap-4 border-t border-border/70 pt-3 text-xs text-muted-foreground">
@@ -518,7 +531,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
             </Tooltip>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>删除“{project.name}”？</AlertDialogTitle>
+                <AlertDialogTitle>删除“{displayName}”？</AlertDialogTitle>
                 <AlertDialogDescription>
                   项目及相关处理结果将被永久删除，此操作无法撤销。
                 </AlertDialogDescription>
