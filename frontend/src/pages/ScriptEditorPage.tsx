@@ -226,7 +226,6 @@ const ScriptEditorPage = () => {
         <SecondaryPageNavigation
           backTo="/scripts"
           backLabel="文案库"
-          items={[{ label: '文案库', to: '/scripts' }, { label: scriptId ? '编辑文案' : '新建文案' }]}
         />
       </div>
 

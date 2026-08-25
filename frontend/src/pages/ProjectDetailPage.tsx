@@ -253,7 +253,6 @@ const ProjectDetailPage = () => {
           <SecondaryPageNavigation
             backTo="/projects"
             backLabel="我的项目"
-            items={[{ label: '我的项目', to: '/projects' }, { label: '项目详情' }]}
           />
           <div className="space-y-3">
             <Skeleton className="h-7 w-80" />
@@ -275,7 +274,6 @@ const ProjectDetailPage = () => {
           <SecondaryPageNavigation
             backTo="/projects"
             backLabel="我的项目"
-            items={[{ label: '我的项目', to: '/projects' }, { label: '项目详情' }]}
           />
           <Alert variant="destructive" className="rounded-[20px]">
             <AlertTitle>项目加载失败</AlertTitle>
@@ -301,7 +299,6 @@ const ProjectDetailPage = () => {
         <SecondaryPageNavigation
           backTo="/projects"
           backLabel="我的项目"
-          items={[{ label: '我的项目', to: '/projects' }, { label: displayProjectName }]}
           className="mb-6"
         />
 

@@ -12,7 +12,6 @@ const HotspotPage = () => (
       <SecondaryPageNavigation
         backTo="/"
         backLabel="工作台"
-        items={[{ label: '工作台', to: '/' }, { label: 'AI 查热点' }]}
       />
 
       <WorkspacePageHeader

@@ -176,7 +176,6 @@ const ProcessingPage = () => {
           <SecondaryPageNavigation
             backTo="/projects"
             backLabel="我的项目"
-            items={[{ label: '我的项目', to: '/projects' }, { label: '生成进度' }]}
           />
           <div className="mx-auto flex max-w-xl flex-col items-center gap-4 py-8">
             <Skeleton className="h-7 w-24 rounded-full" />
@@ -200,7 +199,6 @@ const ProcessingPage = () => {
           <SecondaryPageNavigation
             backTo="/projects"
             backLabel="我的项目"
-            items={[{ label: '我的项目', to: '/projects' }, { label: '生成进度' }]}
           />
           <Alert variant="destructive" className="rounded-[20px]">
             <Icon icon={dangerCircleLinear} className="size-5" />
@@ -243,7 +241,6 @@ const ProcessingPage = () => {
         <SecondaryPageNavigation
           backTo="/projects"
           backLabel="我的项目"
-          items={[{ label: '我的项目', to: '/projects' }, { label: '生成进度' }]}
           className="mb-7"
         />
 
