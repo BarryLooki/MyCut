@@ -1,43 +1,41 @@
-import React from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Layout, Typography, Button } from 'antd'
-import { ArrowLeftOutlined } from '@ant-design/icons'
-import HotspotPanel from '../components/HotspotPanel'
+import { Icon } from '@iconify/react'
+import graphUpBold from '@iconify-icons/solar/graph-up-bold'
 
-const { Content } = Layout
-const { Title, Text } = Typography
+import HotspotPanel from '@/components/HotspotPanel'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 /**
- * 查热点全页：从首页入口卡片进入。
+ * 查热点全页：从工作台入口进入。
  * 完整流程都在这一页：查热点 → 生成大纲 → 生成文案 → 保存到文案库 / 用这个文案剪视频。
  */
-const HotspotPage: React.FC = () => {
-  const navigate = useNavigate()
+const HotspotPage = () => (
+  <main className="relative min-h-svh overflow-hidden bg-background px-5 py-8 sm:px-8 lg:px-12 lg:py-12">
+    <div className="brand-halo pointer-events-none absolute left-1/2 top-0 h-64 w-[34rem] -translate-x-1/2 opacity-55 dark:opacity-25" />
 
-  return (
-    <Layout style={{ minHeight: '100vh', background: 'var(--ac-bg)' }}>
-      <Content style={{ padding: '32px 56px 56px' }}>
-        <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-          {/* 顶部 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-            <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/')}
-              style={{ color: 'var(--ac-sub)', borderRadius: '999px' }}>返回</Button>
-            <Title level={2} style={{ margin: 0, color: 'var(--ac-ink)', fontSize: '20px', fontWeight: 600 }}>
-              AI 查热点
-            </Title>
-          </div>
-          <Text style={{ color: 'var(--ac-muted)', fontSize: '13px', display: 'block', marginBottom: '24px', paddingLeft: '4px' }}>
-            输入领域找选题，点选题进入下一步生成大纲和文案
-          </Text>
-
-          {/* 查热点 → 选题卡片（点选题跳文案编辑页生成大纲/文案） */}
-          <div style={{ background: 'var(--ac-card)', borderRadius: '16px', border: '1px solid var(--ac-line)', padding: '20px', boxShadow: 'var(--ac-shadow)' }}>
-            <HotspotPanel />
-          </div>
+    <div className="relative mx-auto max-w-5xl">
+      <header className="mb-8 flex items-center gap-4">
+        <span className="brand-gradient flex size-11 shrink-0 items-center justify-center rounded-2xl text-white shadow-sm">
+          <Icon icon={graphUpBold} className="size-6 text-white" />
+        </span>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-[-0.025em]">AI 查热点</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            输入内容领域，找到值得创作的选题并继续生成大纲与文案。
+          </p>
         </div>
-      </Content>
-    </Layout>
-  )
-}
+      </header>
+
+      <Card className="rounded-[2rem]">
+        <CardHeader className="px-6 pb-4 pt-6 sm:px-8 sm:pt-8">
+          <CardTitle className="text-base">寻找创作方向</CardTitle>
+          <CardDescription>选择热点后会直接进入文案创作流程。</CardDescription>
+        </CardHeader>
+        <CardContent className="px-6 pb-6 sm:px-8 sm:pb-8">
+          <HotspotPanel />
+        </CardContent>
+      </Card>
+    </div>
+  </main>
+)
 
 export default HotspotPage

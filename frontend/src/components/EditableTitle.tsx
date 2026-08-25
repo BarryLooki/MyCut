@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react'
+import { Icon } from '@iconify/react'
+import checkCircleBold from '@iconify-icons/solar/check-circle-bold'
+import magicWand3Linear from '@iconify-icons/solar/magic-wand-3-linear'
+import penNewSquareLinear from '@iconify-icons/solar/pen-new-square-linear'
 import { Input, Button, Space, message, Tooltip, Modal } from 'antd'
-import { EditOutlined, CheckOutlined } from '@ant-design/icons'
 import { projectApi } from '../services/api'
-import MagicWandIcon from './icons/MagicWandIcon'
 
 interface EditableTitleProps {
   title: string
@@ -129,7 +131,7 @@ const EditableTitle: React.FC<EditableTitleProps> = ({
         onCancel={handleCancel}
         footer={null}
         width={600}
-        destroyOnClose
+        destroyOnHidden
         maskClosable={false}
       >
         <div style={{ marginBottom: '16px' }}>
@@ -155,7 +157,7 @@ const EditableTitle: React.FC<EditableTitleProps> = ({
           <Space>
             <Tooltip title="AI生成标题">
               <Button
-                icon={<MagicWandIcon />}
+                icon={<Icon icon={magicWand3Linear} className="size-4" />}
                 loading={generating}
                 onClick={() => {
                   console.log('AI生成标题按钮被点击');
@@ -171,7 +173,7 @@ const EditableTitle: React.FC<EditableTitleProps> = ({
             </Button>
             <Button
               type="primary"
-              icon={<CheckOutlined />}
+              icon={<Icon icon={checkCircleBold} className="size-4 text-white" />}
               loading={loading}
               onClick={handleSave}
               disabled={generating}
@@ -203,9 +205,10 @@ const EditableTitle: React.FC<EditableTitleProps> = ({
         display: 'inline'
       }}>
         {title}
-        <EditOutlined 
+        <Icon
+          icon={penNewSquareLinear}
           style={{ 
-            color: '#1890ff', 
+            color: 'var(--muted-foreground)',
             fontSize: '12px',
             opacity: 0.7,
             transition: 'opacity 0.2s',

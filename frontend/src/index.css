@@ -1,93 +1,247 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@500&family=Noto+Sans+SC:wght@400;500&display=swap');
+@import "tw-animate-css";
 
-/* ===== MyCut · Calm Premium design tokens (see DESIGN.md) ===== */
-:root{
-  --ac-bg:#F6F5F3; --ac-card:#FFFFFF; --ac-ink:#1A1A19; --ac-sub:#6E6B66; --ac-muted:#A8A59F;
-  --ac-line:#EBE9E4; --ac-line-2:#F0EEEA; --ac-accent:#E8710A; --ac-thumb:#EEECE8;
-  --ac-cta-bg:#1A1A19; --ac-cta-fg:#FFFFFF; --ac-ok:#5BB36A; --ac-error:#E66A5C; --ac-warn:#E6B23C;
-  --ac-font-sans:"Geist","PingFang SC","Noto Sans SC",system-ui,-apple-system,sans-serif;
-  --ac-font-serif:"Instrument Serif",Georgia,serif;
-  --ac-font-mono:"Geist Mono",ui-monospace,monospace;
-  --ac-shadow:0 1px 2px rgba(26,26,25,.03), 0 8px 24px rgba(26,26,25,.05);
+@custom-variant dark (&:is(.dark *));
+
+/* ===== shadcn/ui · new-york + neutral default theme ===== */
+:root {
+  color-scheme: light;
+
+  --radius: 0.75rem;
+  --radius-control: 12px;
+  --radius-media: 16px;
+  --radius-card: 20px;
+  --radius-panel: 24px;
+  --background: #ffffff;
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: #e84d8d;
+  --primary-foreground: #ffffff;
+  --secondary: #f5f5f6;
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: #f5f5f6;
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: #f4f4f5;
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: #e9e9ec;
+  --input: #e9e9ec;
+  --ring: #ed76a7;
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: #ffffff;
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: #e84d8d;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f4f4f5;
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: rgb(0 0 0 / 8%);
+  --sidebar-ring: #ed76a7;
+
+  --font-misans: "MiSans", "Mi Sans", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-weight-regular: 330;
+  --font-weight-medium: 380;
+  --font-weight-semibold: 520;
+  --font-weight-bold: 630;
+  --text-caption: 0.75rem;
+  --text-secondary: 0.875rem;
+  --text-body: 1rem;
+  --text-subheading: 1.25rem;
+  --text-heading: clamp(1.5rem, 1.25rem + 0.8vw, 2rem);
+
+  /* MyCut brand language, derived from the Figma reference. */
+  --brand-gradient: linear-gradient(90deg, #ffc99e 1%, #ff87a4 67%, #ff6ba6 100%);
+  --brand-on-gradient: #ffffff;
+  --brand-soft: #fff1f5;
+  --brand-soft-strong: #ffe6ee;
+  --brand-halo: radial-gradient(circle, rgb(255 107 166 / 18%) 0%, rgb(255 201 158 / 12%) 34%, transparent 70%);
+  --brand-card-shadow: 0 1px 2px rgb(16 24 40 / 3%), 0 10px 28px rgb(16 24 40 / 6%);
+  --workspace-background: #ffffff;
+
+  /* Transitional aliases keep legacy Ant Design surfaces on shadcn tokens. */
+  --ac-bg: var(--background);
+  --ac-card: var(--card);
+  --ac-ink: var(--foreground);
+  --ac-sub: var(--muted-foreground);
+  --ac-muted: var(--muted-foreground);
+  --ac-line: var(--border);
+  --ac-line-2: var(--border);
+  --ac-accent: var(--primary);
+  --ac-thumb: var(--muted);
+  --ac-cta-bg: var(--primary);
+  --ac-cta-fg: var(--primary-foreground);
+  --ac-ok: #5BB36A;
+  --ac-error: #E66A5C;
+  --ac-warn: #E6B23C;
+  --ac-font-sans: var(--font-misans);
+  --ac-font-serif: var(--font-misans);
+  --ac-font-mono: var(--font-misans);
+  --ac-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
 }
-[data-theme="dark"]{
-  --ac-bg:#19181A; --ac-card:#211F22; --ac-ink:#ECEAE6; --ac-sub:#A6A29B; --ac-muted:#76726C;
-  --ac-line:#2C2A2D; --ac-line-2:#232124; --ac-accent:#FF8C42; --ac-thumb:#262428;
-  --ac-cta-bg:#ECEAE6; --ac-cta-fg:#19181A;
-  --ac-shadow:0 1px 2px rgba(0,0,0,.2), 0 8px 24px rgba(0,0,0,.28);
+
+:root.dark,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --background: #151416;
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: #ff87ac;
+  --primary-foreground: #ffffff;
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: #ff87ac;
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: #19181a;
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: #ff87ac;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+
+  --brand-gradient: linear-gradient(90deg, #f2ad7c 1%, #f2769b 67%, #ef5f9c 100%);
+  --brand-on-gradient: #ffffff;
+  --brand-soft: rgb(255 135 172 / 10%);
+  --brand-soft-strong: rgb(255 135 172 / 16%);
+  --brand-halo: radial-gradient(circle, rgb(239 95 156 / 15%) 0%, rgb(242 173 124 / 8%) 34%, transparent 70%);
+  --brand-card-shadow: 0 20px 64px rgb(0 0 0 / 28%);
+  --workspace-background: #151416;
+
+  --ac-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
 }
-html,body,#root{background:var(--ac-bg);color:var(--ac-ink);}
-body{font-family:var(--ac-font-sans);-webkit-font-smoothing:antialiased;}
-.ac-serif{font-family:var(--ac-font-serif);}
-.ac-mono{font-family:var(--ac-font-mono);}
 
-@layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222.2 84% 4.9%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96%;
-    --accent-foreground: 222.2 84% 4.9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
-  }
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --font-sans: var(--font-misans);
+  --font-serif: var(--font-misans);
+  --font-mono: var(--font-misans);
+  --font-weight-normal: 330;
+  --font-weight-medium: 380;
+  --font-weight-semibold: 520;
+  --font-weight-bold: 630;
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
 
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 84% 4.9%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 94.1%;
-  }
+html,
+body,
+#root {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.mycut-page-viewport {
+  scrollbar-gutter: stable both-edges;
+  overscroll-behavior-y: contain;
+}
+
+.ac-serif,
+.ac-mono {
+  font-family: var(--font-misans);
+}
+
+.ac-mono {
+  font-variant-numeric: tabular-nums;
 }
 
 * {
-  margin: 0;
-  padding: 0;
   box-sizing: border-box;
+  border-color: var(--border);
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: var(--font-misans);
+  font-weight: var(--font-weight-regular);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: var(--ac-bg);
-  color: var(--ac-ink);
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+.mycut-hidden-scrollbar {
+  scrollbar-width: none;
+}
+
+.mycut-hidden-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.brand-gradient {
+  background-image: var(--brand-gradient);
+}
+
+.brand-gradient-text {
+  background-image: var(--brand-gradient);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
 }
 
 #root {
   min-height: 100vh;
-  background-color: var(--ac-bg);
+  background-color: var(--background);
 }
 
 .ant-layout {
@@ -803,6 +957,36 @@ body { font-family: var(--ac-font-sans) !important; }
   transform: rotateX(var(--rotate-y)) rotateY(var(--rotate-x));
 }
 
+/* Workspace home — a restrained entrance keeps the tool feeling immediate. */
+@keyframes workspace-home-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.workspace-home-reveal > * {
+  animation: workspace-home-enter 450ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.workspace-home-reveal > :nth-child(2) {
+  animation-delay: 60ms;
+}
+
+.workspace-home-reveal > :nth-child(3) {
+  animation-delay: 110ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-home-reveal > * {
+    animation: none;
+  }
+}
+
 /* GlassIcons 玻璃质感（单色版）——取 reactbits GlassIcons 的玻璃拟态：
    磨砂模糊 backdrop-filter + 内发光白环 + 柔和外阴影 + 悬停 3D 微抬。
    不用彩色渐变，背景仍走 token（Calm Premium）。套在头部胶囊按钮上。 */
@@ -848,4 +1032,125 @@ body { font-family: var(--ac-font-sans) !important; }
     0 0 0 1px color-mix(in srgb, var(--ac-accent) 55%, transparent) inset,
     0 1px 0 rgba(255, 255, 255, 0.12) inset,
     0 6px 16px rgba(0, 0, 0, 0.45);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Global Figma surface language for legacy Ant Design screens during migration. */
+.mycut-app-shell .ant-layout,
+.mycut-app-shell .ant-layout-content {
+  background: var(--workspace-background) !important;
+}
+
+.mycut-app-shell .ant-card,
+.mycut-app-shell .ant-modal-content,
+.mycut-app-shell .ant-drawer-content {
+  border: 0 !important;
+  border-radius: var(--radius-card) !important;
+  background: var(--card) !important;
+  box-shadow: var(--brand-card-shadow) !important;
+}
+
+.mycut-app-shell .ant-card-head,
+.mycut-app-shell .ant-modal-header {
+  border-bottom: 0 !important;
+}
+
+.mycut-app-shell .ant-btn {
+  border-radius: var(--radius-control) !important;
+  font-family: var(--font-misans) !important;
+  box-shadow: none !important;
+}
+
+.mycut-app-shell .ant-btn-primary {
+  border-color: transparent !important;
+  background-color: var(--primary) !important;
+  background-image: var(--brand-gradient) !important;
+  color: #fff !important;
+  box-shadow: 0 6px 18px rgb(255 107 166 / 22%) !important;
+}
+
+.mycut-app-shell .ant-btn-primary .anticon,
+.mycut-app-shell .ant-btn-primary svg {
+  color: #fff !important;
+}
+
+.mycut-app-shell .ant-btn-default {
+  border-color: transparent !important;
+  background: var(--secondary) !important;
+  color: var(--secondary-foreground) !important;
+}
+
+.mycut-app-shell .ant-input,
+.mycut-app-shell .ant-input-affix-wrapper,
+.mycut-app-shell .ant-input-number,
+.mycut-app-shell .ant-select-selector,
+.mycut-app-shell .ant-picker {
+  border-color: transparent !important;
+  border-radius: var(--radius-control) !important;
+  background: var(--muted) !important;
+  box-shadow: none !important;
+}
+
+.mycut-app-shell .ant-table,
+.mycut-app-shell .ant-table-container,
+.mycut-app-shell .ant-table-thead > tr > th,
+.mycut-app-shell .ant-table-tbody > tr > td {
+  background: var(--card) !important;
+}
+
+.mycut-app-shell .ant-table-wrapper {
+  overflow: hidden;
+  border-radius: var(--radius-card);
+  box-shadow: var(--brand-card-shadow);
+}
+
+.mycut-app-shell [data-slot="card"] {
+  border-radius: var(--radius-card) !important;
+}
+
+/* Ant overlays mount outside the app shell; keep them in the same Figma language. */
+.ant-modal-content,
+.ant-popover-inner,
+.ant-dropdown-menu,
+.ant-message-notice-content {
+  border: 0 !important;
+  border-radius: 20px !important;
+  background: var(--card) !important;
+  box-shadow: var(--brand-card-shadow) !important;
+}
+
+.ant-modal-header {
+  border-bottom: 0 !important;
+  background: transparent !important;
+}
+
+.ant-modal .ant-btn,
+.ant-popover .ant-btn {
+  border-radius: var(--radius-control) !important;
+  font-family: var(--font-misans) !important;
+}
+
+.ant-modal .ant-btn-primary,
+.ant-popover .ant-btn-primary,
+.ant-radio-button-wrapper-checked,
+.ant-radio-button-wrapper-checked:hover {
+  border-color: transparent !important;
+  background-color: var(--primary) !important;
+  background-image: var(--brand-gradient) !important;
+  color: #fff !important;
+}
+
+.ant-modal .ant-btn-primary svg,
+.ant-popover .ant-btn-primary svg {
+  color: #fff !important;
 }

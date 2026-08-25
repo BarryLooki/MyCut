@@ -1,7 +1,9 @@
 import React, { useState } from 'react'
+import { Icon } from '@iconify/react'
+import magniferBold from '@iconify-icons/solar/magnifer-bold'
+import magniferLinear from '@iconify-icons/solar/magnifer-linear'
 import { useNavigate } from 'react-router-dom'
 import { Input, InputNumber, Button, Spin, message } from 'antd'
-import { SearchOutlined } from '@ant-design/icons'
 import TopicCard from './TopicCard'
 import { hotspotApi, TopicCard as TopicCardData } from '../services/api'
 
@@ -50,8 +52,9 @@ const HotspotPanel: React.FC = () => {
         <div style={{ display: 'flex', gap: '8px' }}>
           <Input placeholder="关键词(可选)" value={keywords} onChange={(e) => setKeywords(e.target.value)} onPressEnter={handleSearch} />
           <InputNumber min={1} max={15} value={count} onChange={(v) => setCount(v || 5)} style={{ width: 80 }} />
-          <Button type="primary" icon={<SearchOutlined />} onClick={handleSearch} loading={searching}
-            style={{ borderRadius: '10px', background: 'var(--ac-cta-bg)', borderColor: 'var(--ac-cta-bg)', color: 'var(--ac-cta-fg)' }}>查热点</Button>
+          <Button type="primary" icon={<Icon icon={magniferBold} className="size-4 text-white" />} onClick={handleSearch} loading={searching}>
+            查热点
+          </Button>
         </div>
       </div>
 
@@ -72,7 +75,9 @@ const HotspotPanel: React.FC = () => {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px', padding: '48px 0' }}>
-          <SearchOutlined style={{ fontSize: '40px', color: 'var(--ac-muted)' }} />
+          <span className="flex size-12 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+            <Icon icon={magniferLinear} className="size-6" />
+          </span>
           <div style={{ fontSize: '14px', color: 'var(--ac-sub)' }}>AI 查热点，选题就地出文案</div>
         </div>
       )}

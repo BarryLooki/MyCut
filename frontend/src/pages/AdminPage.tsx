@@ -11,6 +11,7 @@ import {
 import { useAuth } from '../context/AuthContext'
 import AiModelConfig from '../components/AiModelConfig'
 import SpeechRecognitionConfig from '../components/SpeechRecognitionConfig'
+import WorkspacePageHeader from '../components/WorkspacePageHeader'
 
 const { Content } = Layout
 const { Text } = Typography
@@ -178,22 +179,29 @@ const AdminPage: React.FC = () => {
   // 未开启登录 / 非管理员 → 安静的无权限态
   if (!authEnabled || !isAdmin) {
     return (
-      <Content style={{ padding: '56px', minHeight: 'calc(100vh - 64px)' }}>
-        <div
-          style={{
-            maxWidth: 480,
-            margin: '80px auto',
-            textAlign: 'center',
-            color: 'var(--ac-sub)',
-          }}
-        >
-          <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--ac-ink)', marginBottom: 8 }}>
-            无后台权限
-          </div>
-          <div style={{ fontSize: 14 }}>
-            {authEnabled
-              ? `当前账号（${user?.email ?? '未知'}）不在管理员白名单内。`
-              : '未开启登录，管理者后台不可用。'}
+      <Content style={{ padding: '64px 56px 48px', minHeight: 'calc(100vh - 64px)' }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+          <WorkspacePageHeader
+            eyebrow="管理控制台"
+            title="管理者后台"
+            description="集中查看用户、会员、订单与模型配置。"
+          />
+          <div
+            style={{
+              maxWidth: 480,
+              margin: '28px auto 0',
+              textAlign: 'center',
+              color: 'var(--ac-sub)',
+            }}
+          >
+            <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--ac-ink)', marginBottom: 8 }}>
+              无后台权限
+            </div>
+            <div style={{ fontSize: 14 }}>
+              {authEnabled
+                ? `当前账号（${user?.email ?? '未知'}）不在管理员白名单内。`
+                : '未开启登录，管理者后台不可用。'}
+            </div>
           </div>
         </div>
       </Content>
@@ -311,12 +319,13 @@ const AdminPage: React.FC = () => {
   ]
 
   return (
-    <Content style={{ padding: '40px 56px', minHeight: 'calc(100vh - 64px)' }}>
+    <Content style={{ padding: '64px 56px 48px', minHeight: 'calc(100vh - 64px)' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, marginBottom: 28 }}>
-          <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--ac-ink)', margin: 0 }}>管理者后台</h2>
-          <Text type="secondary" style={{ fontSize: 12.5 }}>{user?.email}</Text>
-        </div>
+        <WorkspacePageHeader
+          eyebrow="管理控制台"
+          title="管理者后台"
+          description={user?.email ? `当前管理员：${user.email}` : '集中查看用户、会员、订单与模型配置。'}
+        />
 
         <Segmented
           value={tab}

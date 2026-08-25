@@ -99,7 +99,7 @@
   
   <!-- AutoClip 主标题 -->
   <text x="960" y="540" text-anchor="middle" dominant-baseline="middle" 
-        font-family="Arial, sans-serif" font-size="180" font-weight="bold" 
+        font-family="MiSans, sans-serif" font-size="180" font-weight="630"
         fill="url(#textGradient)" filter="url(#textGlow)">
     AutoClip
   </text>

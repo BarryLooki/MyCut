@@ -1,174 +1,187 @@
 import React from 'react'
-import { Layout, Button, Dropdown, message } from 'antd'
-import type { MenuProps } from 'antd'
-import { SettingOutlined, ArrowLeftOutlined, BulbOutlined, MoonOutlined, FileTextOutlined, UserOutlined, LogoutOutlined, CrownOutlined, DashboardOutlined } from '@ant-design/icons'
-import { useNavigate, useLocation } from 'react-router-dom'
-import { useTheme } from '../context/ThemeContext'
+import { Icon } from '@iconify/react'
+import altArrowDownLinear from '@iconify-icons/solar/alt-arrow-down-linear'
+import hamburgerMenuLinear from '@iconify-icons/solar/hamburger-menu-linear'
+import logoutLinear from '@iconify-icons/solar/logout-linear'
+import moonLinear from '@iconify-icons/solar/moon-linear'
+import settingsLinear from '@iconify-icons/solar/settings-linear'
+import sunLinear from '@iconify-icons/solar/sun-linear'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
+
+import logoDark from '../assets/logo-dark.svg'
+import logoLight from '../assets/logo-light.svg'
 import { useAuth } from '../context/AuthContext'
+import { useTheme } from '../context/ThemeContext'
+import { cn } from '../lib/utils'
+import { Button } from './ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu'
 
-const { Header: AntHeader } = Layout
+interface NavigationItem {
+  label: string
+  path: string
+  activePrefixes?: string[]
+}
 
-// Calm Premium header — see DESIGN.md
 const Header: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
-  const isHomePage = location.pathname === '/'
   const { theme, toggleTheme } = useTheme()
   const { authEnabled, user, isAdmin, signOut } = useAuth()
+
+  const navigationItems: NavigationItem[] = [
+    { label: '工作台', path: '/', activePrefixes: ['/hotspots'] },
+    { label: '项目', path: '/projects', activePrefixes: ['/processing', '/project'] },
+    { label: '文案库', path: '/scripts', activePrefixes: ['/script'] },
+    { label: '会员', path: '/membership' },
+    ...((isAdmin || !authEnabled) ? [{ label: '后台', path: '/admin' }] : []),
+  ]
+
+  const isItemActive = (item: NavigationItem) => (
+    location.pathname === item.path ||
+    (item.activePrefixes?.some((prefix) => location.pathname.startsWith(prefix)) ?? false)
+  )
 
   const handleLogout = async () => {
     try {
       await signOut()
-      message.success('已退出登录')
+      toast.success('已退出登录')
     } catch {
-      message.error('退出登录失败，请重试')
+      toast.error('退出登录失败，请重试')
     }
   }
 
-  const userMenu: MenuProps['items'] = [
-    { key: 'email', label: user?.email ?? '', disabled: true },
-    { type: 'divider' },
-    { key: 'logout', label: '退出登录', icon: <LogoutOutlined />, onClick: handleLogout },
-  ]
+  const navControlClass = 'h-8 rounded-none px-0 text-[15px] font-normal tracking-[0.0675px] text-foreground/80 transition-none hover:bg-transparent hover:text-foreground'
+  const underlineClass = 'after:absolute after:-bottom-2 after:left-0 after:h-px after:w-full after:bg-foreground'
+  const navButtonClass = (active: boolean) => cn(
+    navControlClass,
+    'relative',
+    underlineClass,
+    active ? 'text-foreground after:opacity-100' : 'after:opacity-0',
+  )
 
   return (
-    <AntHeader
-      style={{
-        padding: '0 56px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        height: '64px',
-        position: 'sticky',
-        top: 0,
-        zIndex: 1000,
-        backdropFilter: 'blur(10px)',
-        background: 'color-mix(in srgb, var(--ac-bg) 78%, transparent)',
-        borderBottom: '1px solid var(--ac-line-2)',
-      }}
-    >
-      {/* Wordmark — serif, italic "Clip" */}
-      <div
-        style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
-        onClick={() => navigate('/')}
-      >
-        <span
-          style={{
-            fontFamily: 'var(--ac-font-serif)',
-            fontSize: '30px',
-            color: 'var(--ac-ink)',
-            letterSpacing: '1px',
-          }}
+    <header className="relative z-50 h-14 shrink-0 bg-background/92 backdrop-blur-lg supports-[backdrop-filter]:bg-background/90">
+      <div className="relative mx-auto flex h-full w-full max-w-[1441px] items-center justify-between px-5 sm:px-10">
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          className="rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          aria-label="前往 MyCut 工作台"
         >
-          My<em style={{ fontStyle: 'italic' }}>Cut</em>
-        </span>
-      </div>
+          <img src={logoLight} alt="MyCut" className="h-6 w-auto dark:hidden" />
+          <img src={logoDark} alt="MyCut" className="hidden h-6 w-auto dark:block" />
+        </button>
 
-      {/* Right side */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        {!isHomePage && (
-          <Button
-            type="text"
-            icon={<ArrowLeftOutlined />}
-            onClick={() => navigate('/')}
-            style={{ color: 'var(--ac-sub)', height: '36px', borderRadius: '999px' }}
-          >
-            返回
-          </Button>
-        )}
-        <Button
-          type="text"
-          className="glass-btn"
-          icon={theme === 'dark' ? <BulbOutlined /> : <MoonOutlined />}
-          onClick={toggleTheme}
-          aria-label={theme === 'dark' ? '切换到亮色模式' : '切换到暗色模式'}
-          title={theme === 'dark' ? '切换到亮色模式' : '切换到暗色模式'}
-          style={{
-            color: 'var(--ac-sub)',
-            borderRadius: '999px',
-            width: '36px',
-            height: '36px',
-            padding: 0,
-          }}
-        />
-        <Button
-          type="text"
-          className="glass-btn"
-          icon={<FileTextOutlined />}
-          onClick={() => navigate('/scripts')}
-          style={{
-            color: location.pathname === '/scripts' ? 'var(--ac-accent)' : 'var(--ac-sub)',
-            borderRadius: '999px',
-            height: '36px',
-            padding: '0 16px',
-          }}
-        >
-          文案库
-        </Button>
-        <Button
-          type="text"
-          className="glass-btn"
-          icon={<CrownOutlined />}
-          onClick={() => navigate('/membership')}
-          style={{
-            color: location.pathname === '/membership' ? 'var(--ac-accent)' : 'var(--ac-sub)',
-            borderRadius: '999px',
-            height: '36px',
-            padding: '0 16px',
-          }}
-        >
-          会员
-        </Button>
-        {isAdmin && (
-          <Button
-            type="text"
-            className="glass-btn"
-            icon={<DashboardOutlined />}
-            onClick={() => navigate('/admin')}
-            style={{
-              color: location.pathname === '/admin' ? 'var(--ac-accent)' : 'var(--ac-sub)',
-              borderRadius: '999px',
-              height: '36px',
-              padding: '0 16px',
-            }}
-          >
-            后台
-          </Button>
-        )}
-        <Button
-          type="text"
-          className="glass-btn"
-          icon={<SettingOutlined />}
-          onClick={() => navigate('/settings')}
-          style={{
-            color: 'var(--ac-sub)',
-            borderRadius: '999px',
-            height: '36px',
-            padding: '0 16px',
-          }}
-        >
-          设置
-        </Button>
-        {authEnabled && user && (
-          <Dropdown menu={{ items: userMenu }} placement="bottomRight" trigger={['click']}>
-            <Button
-              type="text"
-              className="glass-btn"
-              icon={<UserOutlined />}
-              aria-label="账号"
-              title={user.email ?? '账号'}
-              style={{
-                color: 'var(--ac-sub)',
-                borderRadius: '999px',
-                width: '36px',
-                height: '36px',
-                padding: 0,
-              }}
-            />
-          </Dropdown>
-        )}
+        <nav className="absolute inset-x-0 mx-auto hidden w-fit items-center justify-center gap-8 md:flex" aria-label="主导航">
+          {navigationItems.map((item) => {
+            const active = isItemActive(item)
+            return (
+              <Button
+                key={item.path}
+                type="button"
+                variant="ghost"
+                onClick={() => navigate(item.path)}
+                className={navButtonClass(active)}
+                aria-current={active ? 'page' : undefined}
+              >
+                {item.label}
+              </Button>
+            )
+          })}
+        </nav>
+
+        <div className="flex items-center">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                className={cn(
+                  navControlClass,
+                  'hidden gap-2 md:inline-flex',
+                  location.pathname === '/settings' && 'text-foreground',
+                )}
+                aria-label="打开设置菜单"
+              >
+                <span
+                  className={cn(
+                    'relative flex h-8 items-center',
+                    underlineClass,
+                    location.pathname === '/settings' ? 'after:opacity-100' : 'after:opacity-0',
+                  )}
+                >
+                  设置
+                </span>
+                <Icon icon={altArrowDownLinear} className="size-5 transition-transform data-[state=open]:rotate-180" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              {authEnabled && user && (
+                <>
+                  <DropdownMenuLabel className="truncate font-normal text-muted-foreground">{user.email}</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+              <DropdownMenuItem onSelect={() => navigate('/settings')}>
+                <Icon icon={settingsLinear} />
+                系统设置
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={toggleTheme}>
+                <Icon icon={theme === 'dark' ? sunLinear : moonLinear} />
+                {theme === 'dark' ? '切换到亮色模式' : '切换到暗色模式'}
+              </DropdownMenuItem>
+              {authEnabled && user && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => void handleLogout()}>
+                    <Icon icon={logoutLinear} />
+                    退出登录
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="ghost" size="icon-sm" className="md:hidden" aria-label="打开导航菜单">
+                <Icon icon={hamburgerMenuLinear} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52 md:hidden">
+              {navigationItems.map((item) => (
+                <DropdownMenuItem key={item.path} onSelect={() => navigate(item.path)}>
+                  {item.label}
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => navigate('/settings')}>
+                <Icon icon={settingsLinear} />
+                系统设置
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={toggleTheme}>
+                <Icon icon={theme === 'dark' ? sunLinear : moonLinear} />
+                {theme === 'dark' ? '亮色模式' : '暗色模式'}
+              </DropdownMenuItem>
+              {authEnabled && user && (
+                <DropdownMenuItem onSelect={() => void handleLogout()}>
+                  <Icon icon={logoutLinear} />
+                  退出登录
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
-    </AntHeader>
+    </header>
   )
 }
 
