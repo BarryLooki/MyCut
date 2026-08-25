@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '@iconify/react'
 import addCircleBold from '@iconify-icons/solar/add-circle-bold'
 import clapperboardLinear from '@iconify-icons/solar/clapperboard-linear'
@@ -15,6 +15,7 @@ import CollectionCard from '@/components/CollectionCard'
 import CollectionPreviewModal from '@/components/CollectionPreviewModal'
 import CreateCollectionModal from '@/components/CreateCollectionModal'
 import { ProjectTaskManager } from '@/components/ProjectTaskManager'
+import SecondaryPageNavigation from '@/components/SecondaryPageNavigation'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -61,8 +62,6 @@ const ProjectDetailPage = () => {
   const navigate = useNavigate()
   const {
     currentProject,
-    loading,
-    error,
     setCurrentProject,
     upsertProject,
     updateCollection,
@@ -78,10 +77,20 @@ const ProjectDetailPage = () => {
   const [sortBy, setSortBy] = useState<'time' | 'score'>('score')
   const [showCollectionDetail, setShowCollectionDetail] = useState(false)
   const [selectedCollection, setSelectedCollection] = useState<Collection | null>(null)
+  const [pageLoading, setPageLoading] = useState(true)
+  const [pageError, setPageError] = useState<string | null>(null)
+  const loadErrorNotified = useRef(false)
   const { generateAndDownloadCollectionVideo } = useCollectionVideoDownload()
 
   useEffect(() => {
-    if (!id) return
+    loadErrorNotified.current = false
+    setPageError(null)
+    setPageLoading(true)
+    if (!id) {
+      setPageError('缺少项目 ID。')
+      setPageLoading(false)
+      return
+    }
     void loadProject()
     void loadProcessingStatus()
   }, [id])
@@ -113,7 +122,13 @@ const ProjectDetailPage = () => {
       }
     } catch (loadError) {
       console.error('Failed to load project:', loadError)
-      toast.error('加载项目失败')
+      setPageError('没有找到这个项目，或当前连接暂时不可用。')
+      if (!loadErrorNotified.current) {
+        loadErrorNotified.current = true
+        toast.error('加载项目失败')
+      }
+    } finally {
+      setPageLoading(false)
     }
   }
 
@@ -231,10 +246,15 @@ const ProjectDetailPage = () => {
     [currentProject?.clips],
   )
 
-  if (loading) {
+  if (pageLoading) {
     return (
       <main className="min-h-svh bg-background px-5 py-8 sm:px-8 lg:px-12 lg:py-10">
         <div className="mx-auto max-w-7xl space-y-6">
+          <SecondaryPageNavigation
+            backTo="/projects"
+            backLabel="我的项目"
+            items={[{ label: '我的项目', to: '/projects' }, { label: '项目详情' }]}
+          />
           <div className="space-y-3">
             <Skeleton className="h-7 w-80" />
             <Skeleton className="h-4 w-64" />
@@ -248,16 +268,23 @@ const ProjectDetailPage = () => {
     )
   }
 
-  if (error || !currentProject) {
+  if (pageError || !currentProject || currentProject.id !== id) {
     return (
       <main className="min-h-svh bg-background px-5 py-8 sm:px-8 lg:px-12 lg:py-10">
-        <Alert variant="destructive" className="mx-auto max-w-3xl rounded-[20px]">
-          <AlertTitle>项目加载失败</AlertTitle>
-          <AlertDescription className="mt-2 flex flex-wrap items-center justify-between gap-4">
-            <span>{error || '没有找到这个项目。'}</span>
-            <Button variant="secondary" size="sm" onClick={() => navigate('/')}>返回工作台</Button>
-          </AlertDescription>
-        </Alert>
+        <div className="mx-auto max-w-3xl space-y-6">
+          <SecondaryPageNavigation
+            backTo="/projects"
+            backLabel="我的项目"
+            items={[{ label: '我的项目', to: '/projects' }, { label: '项目详情' }]}
+          />
+          <Alert variant="destructive" className="rounded-[20px]">
+            <AlertTitle>项目加载失败</AlertTitle>
+            <AlertDescription className="mt-2 flex flex-wrap items-center justify-between gap-4">
+              <span>{pageError || '没有找到这个项目。'}</span>
+              <Button variant="secondary" size="sm" onClick={() => navigate('/projects')}>返回我的项目</Button>
+            </AlertDescription>
+          </Alert>
+        </div>
       </main>
     )
   }
@@ -266,10 +293,18 @@ const ProjectDetailPage = () => {
   const collections = currentProject.collections || []
   const isCompleted = currentProject.status === 'completed'
   const isFailed = currentProject.status === 'failed' || currentProject.status === 'error'
+  const displayProjectName = currentProject.name.replace(/^成片(?:\s*[：:]\s*)?/, '').trim() || currentProject.name
 
   return (
     <main className="min-h-svh bg-background px-5 py-8 sm:px-8 lg:px-12 lg:py-10">
       <div className="mx-auto max-w-7xl">
+        <SecondaryPageNavigation
+          backTo="/projects"
+          backLabel="我的项目"
+          items={[{ label: '我的项目', to: '/projects' }, { label: displayProjectName }]}
+          className="mb-6"
+        />
+
         <header className="mb-7 flex flex-wrap items-start justify-between gap-5">
           <div className="min-w-0">
             <div className="mb-2 flex items-center gap-2">
@@ -280,7 +315,7 @@ const ProjectDetailPage = () => {
               </Badge>
             </div>
             <h1 className="max-w-3xl truncate text-2xl font-semibold tracking-[-0.025em] sm:text-[1.75rem]">
-              {currentProject.name}
+              {displayProjectName}
             </h1>
             <p className="mt-1.5 text-sm text-muted-foreground">
               管理 AI 精选片段，组合合集并继续完成视频。
@@ -424,7 +459,7 @@ const ProjectDetailPage = () => {
           <div className="space-y-5">
             <Card>
               <CardContent className="p-5 sm:p-6">
-                <ProjectTaskManager projectId={currentProject.id} projectName={currentProject.name} />
+                <ProjectTaskManager projectId={currentProject.id} projectName={displayProjectName} />
               </CardContent>
             </Card>
             <div className="flex min-h-48 flex-col items-center justify-center rounded-[20px] bg-muted/65 px-6 text-center">

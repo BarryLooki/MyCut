@@ -12,6 +12,7 @@ import videoFramePlayHorizontalLinear from '@iconify-icons/solar/video-frame-pla
 import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
+import SecondaryPageNavigation from '@/components/SecondaryPageNavigation'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -221,7 +222,15 @@ const ScriptEditorPage = () => {
 
   return (
     <main className="min-h-[calc(100svh-3.5rem)] bg-[var(--workspace-background)]">
-      <div className="sticky top-14 z-40 border-b border-border/70 bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/88">
+      <div className="mx-auto w-full max-w-[1360px] px-4 pt-4 sm:px-6 lg:px-8">
+        <SecondaryPageNavigation
+          backTo="/scripts"
+          backLabel="文案库"
+          items={[{ label: '文案库', to: '/scripts' }, { label: scriptId ? '编辑文案' : '新建文案' }]}
+        />
+      </div>
+
+      <div className="sticky top-0 z-40 mt-2 border-b border-border/70 bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/88">
         <div className="mx-auto flex w-full max-w-[1360px] flex-wrap items-center gap-3 px-4 py-3 sm:px-6 lg:px-8">
           <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-foreground">
             <Icon icon={documentTextLinear} className="size-5" />
@@ -268,7 +277,7 @@ const ScriptEditorPage = () => {
         </div>
       </div>
 
-      <div className="mx-auto grid w-full max-w-[1360px] items-start gap-5 px-4 py-6 sm:px-6 lg:grid-cols-[380px_minmax(0,1fr)] lg:px-8 lg:py-8">
+      <div className="mx-auto grid w-full max-w-[1360px] items-start gap-5 px-4 py-6 sm:px-6 md:grid-cols-[320px_minmax(0,1fr)] lg:grid-cols-[360px_minmax(0,1fr)] lg:px-8 lg:py-8 xl:grid-cols-[380px_minmax(0,1fr)]">
         <aside className="space-y-5">
           <Card className="shadow-none">
             <CardHeader className="pb-5">
