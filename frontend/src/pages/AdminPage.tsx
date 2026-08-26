@@ -191,8 +191,8 @@ const AdminPage: React.FC = () => {
   // 未开启登录 / 非管理员 → 安静的无权限态
   if (!authEnabled || !isAdmin) {
     return (
-      <Content className="min-h-[calc(100svh-3.5rem)] bg-[var(--workspace-background)] px-4 pb-16 pt-16 sm:px-6 lg:px-8">
-        <div className="mx-auto w-full max-w-[1100px]">
+      <Content className="min-h-[calc(100svh-3.5rem)] bg-[var(--workspace-background)] px-6 pb-16 pt-10">
+        <div className="w-full max-w-[1100px]">
           <WorkspacePageHeader
             title="管理者后台"
             description="集中查看用户、会员、订单与模型配置。"
@@ -334,8 +334,8 @@ const AdminPage: React.FC = () => {
   ]
 
   return (
-    <Content style={{ padding: '64px 56px 48px', minHeight: 'calc(100vh - 64px)' }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+    <Content style={{ padding: '40px 24px 48px', minHeight: 'calc(100vh - 64px)' }}>
+      <div style={{ maxWidth: 1100 }}>
         <WorkspacePageHeader
           title="管理者后台"
           description={user?.email ? `当前管理员：${user.email}` : '集中查看用户、会员、订单与模型配置。'}

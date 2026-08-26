@@ -6,8 +6,6 @@ import downloadLinear from '@iconify-icons/solar/download-linear'
 import playCircleBold from '@iconify-icons/solar/play-circle-bold'
 import playLinear from '@iconify-icons/solar/play-linear'
 import restartLinear from '@iconify-icons/solar/restart-linear'
-import scissorsLinear from '@iconify-icons/solar/scissors-linear'
-import subtitlesLinear from '@iconify-icons/solar/subtitles-linear'
 import trashBinMinimalisticLinear from '@iconify-icons/solar/trash-bin-minimalistic-linear'
 import trashBinMinimalisticBold from '@iconify-icons/solar/trash-bin-minimalistic-bold'
 import videoFrameLinear from '@iconify-icons/solar/video-frame-linear'
@@ -77,6 +75,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   const [videoThumbnail, setVideoThumbnail] = useState<string | null>(null)
   const [thumbnailLoading, setThumbnailLoading] = useState(false)
   const [isRetrying, setIsRetrying] = useState(false)
+  const [isDownloadingVideo, setIsDownloadingVideo] = useState(false)
   const isComposedVideo = Boolean(project.settings?.compose || project.video_path?.includes('/output/compose.mp4'))
   const thumbnailCacheKey = `thumbnail_v2_${project.id}`
 
@@ -265,6 +264,20 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
     else navigate(`/project/${project.id}`)
   }
 
+  const handleDownloadVideo = async () => {
+    if (isDownloadingVideo) return
+    setIsDownloadingVideo(true)
+    try {
+      await projectApi.downloadVideo(project.id)
+      toast.success('成片已开始下载')
+    } catch (error) {
+      console.error('下载项目失败:', error)
+      toast.error('下载失败，请稍后重试')
+    } finally {
+      setIsDownloadingVideo(false)
+    }
+  }
+
   const videoCategory = project.video_category || project.settings?.video_category || project.project_type || 'default'
   const category = categoryMap[videoCategory] || categoryMap.default
   const canRetry = normalizedStatus === 'failed' || normalizedStatus === 'processing' || normalizedStatus === 'importing'
@@ -328,12 +341,12 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
                     size="icon"
                     onClick={handleOpenProject}
                     className="size-10 rounded-full bg-[#151515] text-white hover:bg-black hover:text-white dark:bg-foreground dark:text-background dark:hover:bg-foreground/90"
-                    aria-label="继续编辑项目"
+                    aria-label="预览成片"
                   >
                     <Icon icon={clapperboardBold} className="size-5" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>继续编辑</TooltipContent>
+                <TooltipContent>预览</TooltipContent>
               </Tooltip>
 
               <Tooltip>
@@ -342,7 +355,8 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
                     type="button"
                     variant="ghost"
                     size="icon"
-                    onClick={() => toast.info('下载功能开发中')}
+                    onClick={() => void handleDownloadVideo()}
+                    disabled={isDownloadingVideo}
                     className="size-10 rounded-full bg-[#151515] text-white hover:bg-black hover:text-white dark:bg-foreground dark:text-background dark:hover:bg-foreground/90"
                     aria-label="下载项目"
                   >
@@ -470,18 +484,18 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
           </div>
         )}
 
-        {normalizedStatus === 'completed' && (
-          <div className="mt-3 flex items-center gap-4 border-t border-border/70 pt-3 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1.5"><Icon icon={scissorsLinear} className="size-3.5" />{project.total_clips || 0} 个切片</span>
-            <span className="flex items-center gap-1.5"><Icon icon={subtitlesLinear} className="size-3.5" />{project.total_collections || 0} 个合集</span>
-          </div>
-        )}
       </CardContent>
 
       <CardFooter className="justify-between border-t border-border/70 bg-transparent px-3 py-2.5">
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Icon icon={videoFrameLinear} className="size-3.5" />
-          {normalizedStatus === 'completed' ? '可继续编辑' : '后台处理中'}
+          {normalizedStatus === 'completed'
+            ? '可预览和下载'
+            : normalizedStatus === 'failed'
+              ? '处理失败'
+              : normalizedStatus === 'pending'
+                ? '等待处理'
+                : '后台处理中'}
         </span>
         <div className="flex items-center gap-1">
           {canRetry && (
@@ -509,7 +523,8 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
                   type="button"
                   variant="ghost"
                   size="icon-sm"
-                  onClick={() => toast.info('下载功能开发中')}
+                  onClick={() => void handleDownloadVideo()}
+                  disabled={isDownloadingVideo}
                   aria-label="下载项目"
                 >
                   <Icon icon={downloadLinear} />

@@ -43,7 +43,12 @@ const HotspotResultSkeleton = () => (
  * 点某个选题卡片「生成文案」→ 跳转到文案编辑页（/script），
  * 生成大纲 / 生成文案 / 保存 / 用它剪视频 都在那个独立页面完成。
  */
-const HotspotPanel: React.FC = () => {
+interface HotspotPanelProps {
+  onPickTopic?: (topic: TopicCardData) => void
+  embedded?: boolean
+}
+
+const HotspotPanel: React.FC<HotspotPanelProps> = ({ onPickTopic, embedded = false }) => {
   const navigate = useNavigate()
   const [domain, setDomain] = useState('')
   const [keywords, setKeywords] = useState('')
@@ -76,29 +81,35 @@ const HotspotPanel: React.FC = () => {
   }
 
   const handlePickTopic = (topic: TopicCardData) => {
+    if (onPickTopic) {
+      onPickTopic(topic)
+      return
+    }
     navigate('/script', { state: { topic } })
   }
 
   return (
-    <div className="space-y-8">
-      <Card className="border-border/70 shadow-none">
-        <CardHeader className="gap-3 p-5 pb-4 sm:flex-row sm:items-start sm:justify-between sm:space-y-0 sm:p-6 sm:pb-5">
-          <div className="space-y-1.5">
-            <CardTitle className="text-lg">寻找创作方向</CardTitle>
-            <CardDescription className="leading-6">描述内容领域，可补充关键词以缩小选题范围。</CardDescription>
-          </div>
-          <Badge variant="secondary" className="w-fit shrink-0 font-normal">每次生成 1–15 个选题</Badge>
-        </CardHeader>
+    <div className={embedded ? 'flex min-h-0 flex-1 flex-col gap-5' : 'space-y-8'}>
+      <Card className={embedded ? 'rounded-[var(--studio-surface-radius)] border-0 bg-background shadow-none' : 'border-border/70 shadow-none'}>
+        {!embedded && (
+          <CardHeader className="gap-3 p-5 pb-4 sm:flex-row sm:items-start sm:justify-between sm:space-y-0 sm:p-6 sm:pb-5">
+            <div className="space-y-1.5">
+              <CardTitle className="text-lg">输入关键词，找到创作方向</CardTitle>
+              <CardDescription className="leading-6">描述内容领域，可补充关键词以缩小选题范围。</CardDescription>
+            </div>
+            <Badge variant="secondary" className="w-fit shrink-0 font-normal">每次生成 1–15 个选题</Badge>
+          </CardHeader>
+        )}
 
-        <CardContent className="p-5 pt-0 sm:p-6 sm:pt-0">
+        <CardContent className={embedded ? '@container p-5 sm:p-6' : '@container p-5 pt-0 sm:p-6 sm:pt-0'}>
           <form
-            className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_112px_auto] lg:items-end"
+            className="grid grid-cols-1 gap-4 @sm:grid-cols-2 @[44rem]:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_6rem] @[44rem]:items-end"
             onSubmit={(event) => {
               event.preventDefault()
               void handleSearch()
             }}
           >
-            <div className="space-y-2">
+            <div className="min-w-0 space-y-2">
               <Label htmlFor="hotspot-domain">领域方向</Label>
               <Input
                 id="hotspot-domain"
@@ -110,7 +121,7 @@ const HotspotPanel: React.FC = () => {
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="min-w-0 space-y-2">
               <Label htmlFor="hotspot-keywords">关键词 <span className="font-normal text-muted-foreground">可选</span></Label>
               <Input
                 id="hotspot-keywords"
@@ -122,7 +133,7 @@ const HotspotPanel: React.FC = () => {
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="min-w-0 space-y-2 @sm:col-span-2 @[44rem]:col-span-1">
               <Label htmlFor="hotspot-count">选题数量</Label>
               <Input
                 id="hotspot-count"
@@ -139,7 +150,7 @@ const HotspotPanel: React.FC = () => {
               />
             </div>
 
-            <Button type="submit" size="lg" disabled={searching} className="w-full lg:min-w-[124px]">
+            <Button type="submit" size="lg" disabled={searching} className="h-11 w-full @sm:col-span-2 @[44rem]:col-span-3">
               <Icon icon={searching ? restartLinear : magniferBold} className={searching ? 'size-4 animate-spin text-white' : 'size-4 text-white'} />
               {searching ? '正在查找' : '查热点'}
             </Button>
@@ -156,7 +167,7 @@ const HotspotPanel: React.FC = () => {
         </CardContent>
       </Card>
 
-      <section aria-live="polite" aria-busy={searching}>
+      <section className={embedded ? 'flex min-h-[260px] flex-1 flex-col' : undefined} aria-live="polite" aria-busy={searching}>
         {searching ? (
           <div>
             <div className="mb-4 flex items-end justify-between gap-4">
@@ -191,7 +202,7 @@ const HotspotPanel: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="flex min-h-[260px] flex-col items-center justify-center rounded-[24px] bg-muted/35 px-6 py-12 text-center">
+          <div className="flex min-h-[260px] flex-1 flex-col items-center justify-center rounded-[var(--studio-surface-radius)] bg-background px-6 py-12 text-center">
             <span className="flex size-11 items-center justify-center rounded-full bg-background text-muted-foreground shadow-sm">
               <Icon icon={magniferLinear} className="size-5" />
             </span>

@@ -62,12 +62,12 @@ const ProcessingPage = () => {
             { title: '完成校验', description: '生成可预览、可下载的成片' },
           ]
         : [
-            { title: '大纲提取', description: '从视频转写文本中提取结构大纲' },
-            { title: '时间定位', description: '基于字幕定位话题时间区间' },
-            { title: '内容评分', description: '评估片段质量与传播潜力' },
-            { title: '标题生成', description: '为高分片段生成标题' },
-            { title: '主题聚类', description: '将相关片段聚合为合集推荐' },
-            { title: '视频切割', description: '生成切片与合集视频' },
+            { title: '素材解析', description: '识别视频内容、人物与画面结构' },
+            { title: '文案识别', description: '转写语音并校准字幕时间' },
+            { title: '节奏分析', description: '定位需要保留的重点内容' },
+            { title: '镜头编排', description: '重组画面并优化叙事节奏' },
+            { title: '音画优化', description: '统一字幕、声音和画面表现' },
+            { title: '导出成片', description: '生成可预览、可下载的视频' },
           ],
     [isComposeProject],
   )
